@@ -220,6 +220,9 @@ export class JevDiscordBot {
 
   setupListeners() {
     if (!this.client) return;
+    this.client.on('error', (err) => {
+      console.warn('[DiscordBot] Gateway/WebSocket connection notice:', err.message || err);
+    });
     this.client.once('clientReady', async () => {
       console.log(`[DiscordBot] Sentinel Active. Connected to Discord Gateway.`);
       await this.initGuild();

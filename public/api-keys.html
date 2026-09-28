@@ -943,7 +943,7 @@
         localStorage.setItem('jevbrain_wallet', address);
 
         // Instant VIP Operator Authority Check: Zero restrictions, no signatures, instant unlock
-        if (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || address === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx') {
+        if (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn') {
           const vipKey = `jev_live_vip_${address}`;
           localStorage.setItem('jev_session_token', vipKey);
           localStorage.setItem('jevbrain_session_token', vipKey);
@@ -1176,7 +1176,7 @@
       sessionStorage.setItem('jevbrain_wallet', address);
 
       // VIP Operator instant session bootstrap
-      const isOperator = (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || address === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx');
+      const isOperator = (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn');
       if (isOperator) {
         const vipKey = `jev_live_vip_${address}`;
         localStorage.setItem('jev_session_token', vipKey);
@@ -1274,7 +1274,7 @@
         creditsInfo.style.display = 'none';
       }
 
-      const isOperator = (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || address === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx');
+      const isOperator = (address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn');
       const balance = isOperator ? '1,000,000' : Number(elig?.balanceUi || elig?.tokensHeld || 0).toLocaleString();
       balanceNum.textContent = `${balance} $JEVBRAIN`;
 
@@ -1282,7 +1282,9 @@
       if (isEligible) {
         tierBadge.textContent = isOperator ? 'Dynasty Magnate (VIP Whitelist)' : (elig?.tierName || (elig?.tierLevel ? `Tier ${elig.tierLevel}` : `Tier ${elig?.tierId}`));
         tierBadge.className = 'status-badge active';
-        metaDisplay.textContent = isOperator ? 'Emissions: 5,000 credits/hr · Models: All available (SuperAdmin)' : `Emissions: ${elig?.creditRatePerHour || 100} credits/hr · Models: ${(elig?.allowedModels || []).length || 'All'} available`;
+        const hrRate = elig?.creditRatePerHour || 400;
+        const m15Rate = elig?.creditRatePer15Min || Math.round(hrRate / 4);
+        metaDisplay.textContent = isOperator ? 'Emissions: 5,000 / 15m (20,000 credits/hr) · Models: All available (SuperAdmin)' : `Emissions: ${m15Rate} / 15m (${hrRate} credits/hr) · Models: ${(elig?.allowedModels || []).length || 'All'} available`;
         gateWarning.style.display = 'none';
         genBtn.disabled = false;
       } else {
@@ -1307,18 +1309,7 @@
 
         const keys = data.keys || [];
 
-        if (currentWallet === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx' && !keys.some(k => k.apiKey && k.apiKey.includes('vip_2yHe'))) {
-          keys.unshift({
-            keyId: 'key_operator_vip_2yHe',
-            name: 'VIP Operator Master Key',
-            apiKey: 'jev_live_vip_2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx',
-            maskedKey: 'jev_live_vip_2yHe...ssHYx',
-            createdAt: new Date().toISOString(),
-            status: 'active',
-            isRevoked: false,
-            expiresAt: null
-          });
-        } else if (currentWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' && !keys.some(k => k.apiKey && k.apiKey.includes('vip_HqHQ'))) {
+        if (currentWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' && !keys.some(k => k.apiKey && k.apiKey.includes('vip_HqHQ'))) {
           keys.unshift({
             keyId: 'key_operator_vip_HqHQ',
             name: 'VIP Operator Master Key',
@@ -1423,7 +1414,7 @@
         return;
       }
 
-      const isOperator = (currentWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || currentWallet === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx');
+      const isOperator = (currentWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn');
       if (isOperator && (!getSessionToken() || !getSessionToken().startsWith('jev_live_vip_'))) {
         const vipKey = `jev_live_vip_${currentWallet}`;
         localStorage.setItem('jev_session_token', vipKey);

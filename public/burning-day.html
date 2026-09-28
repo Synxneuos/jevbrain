@@ -1,0 +1,2080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Burning Day · P2P Credit & Token Burn Market — Jev Brain</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Solana Web3 Official Bundle for 1-Click Phantom Transactions -->
+  <script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
+
+  <!-- Early Theme Initializer -->
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('jev_theme');
+        if (t === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+
+  <style>
+    :root {
+      --flame-primary: #f97316;
+      --flame-glow: rgba(249, 115, 22, 0.25);
+      --flame-border: rgba(249, 115, 22, 0.4);
+      --gold-operator: #eab308;
+      --gold-glow: rgba(234, 179, 8, 0.25);
+    }
+
+    .p2p-layout {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-main, #09090b);
+      color: var(--text-primary, #f4f4f5);
+      font-family: var(--font-sans, 'Inter', sans-serif);
+      line-height: 1.5;
+    }
+
+    /* Top Navigation */
+    .site-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--border-subtle, #27272a);
+      background: var(--bg-topbar, rgba(13, 13, 16, 0.94));
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .nav-brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-title {
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-flame-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffedd5;
+      background: linear-gradient(135deg, #ea580c, #c2410c);
+      padding: 3px 8px;
+      border-radius: 6px;
+      box-shadow: 0 0 12px var(--flame-glow);
+      font-family: var(--font-mono, monospace);
+    }
+    .nav-ticker-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      font-family: var(--font-mono, monospace);
+      color: var(--text-secondary, #a1a1aa);
+    }
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ticker-val {
+      color: var(--text-primary, #fff);
+      font-weight: 600;
+    }
+    .nav-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-action-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary, #a1a1aa);
+      text-decoration: none;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle, #27272a);
+      background: var(--bg-surface, #121215);
+      transition: all 0.15s ease;
+    }
+    .nav-action-link:hover {
+      color: var(--text-primary, #f4f4f5);
+      border-color: var(--border-medium, #3f3f46);
+      background: var(--bg-card, #18181b);
+    }
+    .theme-toggle-btn {
+      background: var(--bg-surface, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      color: var(--text-secondary, #a1a1aa);
+      cursor: pointer;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .theme-toggle-btn:hover {
+      color: var(--text-primary, #f4f4f5);
+      border-color: var(--border-medium, #3f3f46);
+    }
+    .btn-connect-wallet {
+      background: linear-gradient(135deg, #ea580c, #c2410c);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #f97316;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 10px rgba(234, 88, 12, 0.25);
+    }
+    .btn-connect-wallet:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .btn-connect-wallet.connected {
+      background: var(--bg-surface, #18181b);
+      color: var(--text-primary, #fff);
+      border-color: var(--border-medium, #3f3f46);
+      box-shadow: none;
+    }
+
+    /* Main Container */
+    .main-content {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+      flex: 1;
+    }
+
+    /* Operator Master Banner */
+    .operator-vip-card {
+      display: none;
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(161, 98, 7, 0.18));
+      border: 1px solid var(--gold-operator);
+      box-shadow: 0 0 20px var(--gold-glow);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .operator-vip-card.active {
+      display: flex;
+    }
+    .operator-vip-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .operator-badge {
+      background: var(--gold-operator);
+      color: #000;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      font-family: var(--font-mono, monospace);
+    }
+
+    /* Hero & Flywheel Section */
+    .hero-panel {
+      background: linear-gradient(180deg, rgba(24, 24, 27, 0.7), rgba(9, 9, 11, 0.9));
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 14px;
+      padding: 32px 28px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-panel::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, var(--flame-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid var(--flame-border);
+      color: #fb923c;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-mono, monospace);
+      margin-bottom: 12px;
+    }
+    .hero-headline {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+    .hero-subheadline {
+      font-size: 15px;
+      color: var(--text-secondary, #a1a1aa);
+      max-width: 850px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    /* Flywheel Loop Visual */
+    .loop-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: var(--bg-surface, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    .loop-node {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      font-family: var(--font-mono, monospace);
+      padding: 6px 12px;
+      background: var(--bg-card, #1c1c21);
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle, #27272a);
+    }
+    .loop-node.burn {
+      border-color: var(--flame-border);
+      color: #fb923c;
+      background: rgba(249, 115, 22, 0.1);
+    }
+    .loop-node.sol {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.1);
+    }
+    .loop-arrow {
+      color: var(--text-tertiary, #71717a);
+      font-weight: 800;
+    }
+
+    /* Global Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .metric-card {
+      background: var(--bg-card, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .metric-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary, #a1a1aa);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .metric-val {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      font-family: var(--font-mono, monospace);
+      color: var(--text-primary, #fff);
+    }
+    .metric-val.burn {
+      color: #f97316;
+    }
+    .metric-val.sol {
+      color: #10b981;
+    }
+
+    /* Tabs Bar */
+    .market-tabs-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle, #27272a);
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .market-tabs-group {
+      display: flex;
+      gap: 4px;
+    }
+    .market-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary, #a1a1aa);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 18px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    .market-tab-btn:hover {
+      color: var(--text-primary, #fff);
+    }
+    .market-tab-btn.active {
+      color: #f97316;
+      border-bottom-color: #f97316;
+    }
+    .tab-badge {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 100px;
+      background: var(--bg-pill, #27272a);
+      color: var(--text-secondary, #a1a1aa);
+    }
+    .market-tab-btn.active .tab-badge {
+      background: rgba(249, 115, 22, 0.2);
+      color: #f97316;
+    }
+
+    /* Filter & Search Bar */
+    .market-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .market-search-input {
+      background: var(--bg-surface, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary, #fff);
+      font-size: 13px;
+      width: 240px;
+      outline: none;
+      font-family: var(--font-mono, monospace);
+    }
+    .market-search-input:focus {
+      border-color: #f97316;
+    }
+    .market-sort-select {
+      background: var(--bg-surface, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary, #fff);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Orderbook Grid */
+    .orders-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 18px;
+    }
+    .order-card {
+      background: var(--bg-card, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 12px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .order-card:hover {
+      border-color: rgba(249, 115, 22, 0.35);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      transform: translateY(-2px);
+    }
+    .order-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .order-seller-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: var(--font-mono, monospace);
+      color: var(--text-secondary, #a1a1aa);
+      background: var(--bg-surface, #1a1a1e);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle, #27272a);
+      text-decoration: none;
+    }
+    .order-seller-badge:hover {
+      color: var(--text-primary, #fff);
+      border-color: #f97316;
+    }
+    .order-status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .order-compute-val {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-primary, #fff);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .order-compute-unit {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary, #a1a1aa);
+      letter-spacing: normal;
+    }
+    .order-meta-box {
+      background: var(--bg-surface, #0c0c0e);
+      border: 1px solid var(--border-subtle, #222227);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .order-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .order-meta-label {
+      color: var(--text-secondary, #a1a1aa);
+    }
+    .order-meta-val {
+      font-family: var(--font-mono, monospace);
+      font-weight: 600;
+      color: var(--text-primary, #fff);
+    }
+    .order-meta-val.price {
+      color: #10b981;
+      font-size: 13px;
+    }
+    .order-meta-val.burn {
+      color: #f97316;
+    }
+    .btn-buy-order {
+      width: 100%;
+      background: linear-gradient(135deg, #ea580c, #c2410c);
+      color: #fff;
+      border: 1px solid #f97316;
+      border-radius: 8px;
+      padding: 11px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 12px rgba(234, 88, 12, 0.3);
+    }
+    .btn-buy-order:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .btn-cancel-order {
+      width: 100%;
+      background: var(--bg-surface, #18181b);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-cancel-order:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+
+    /* Sell Panel */
+    .sell-panel {
+      background: var(--bg-card, #121215);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 14px;
+      padding: 32px 28px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .sell-headline {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .sell-subtext {
+      font-size: 13px;
+      color: var(--text-secondary, #a1a1aa);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-secondary, #a1a1aa);
+      margin-bottom: 8px;
+    }
+    .form-input-box {
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface, #0c0c0e);
+      border: 1px solid var(--border-subtle, #27272a);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .form-input-box:focus-within {
+      border-color: #f97316;
+    }
+    .form-input-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary, #fff);
+      font-size: 18px;
+      font-weight: 700;
+      font-family: var(--font-mono, monospace);
+      outline: none;
+    }
+    .form-input-unit {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary, #a1a1aa);
+      font-family: var(--font-mono, monospace);
+    }
+    .preset-chips {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .preset-chip {
+      background: var(--bg-surface, #18181b);
+      border: 1px solid var(--border-subtle, #27272a);
+      color: var(--text-secondary, #a1a1aa);
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--font-mono, monospace);
+      transition: all 0.15s ease;
+    }
+    .preset-chip:hover {
+      color: var(--text-primary, #fff);
+      border-color: #f97316;
+    }
+    .quote-preview-box {
+      background: rgba(249, 115, 22, 0.05);
+      border: 1px solid var(--flame-border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin: 24px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 12.5px;
+    }
+    .quote-preview-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .quote-preview-val {
+      font-family: var(--font-mono, monospace);
+      font-weight: 700;
+      color: var(--text-primary, #fff);
+    }
+    .btn-create-listing {
+      width: 100%;
+      background: linear-gradient(135deg, #ea580c, #c2410c);
+      color: #fff;
+      border: 1px solid #f97316;
+      border-radius: 8px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+    }
+    .btn-create-listing:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: var(--bg-card, #121215);
+      border: 1px solid var(--border-medium, #3f3f46);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      transform: translateY(10px);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.active .modal-card {
+      transform: translateY(0);
+    }
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border-subtle, #27272a);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary, #a1a1aa);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-body-subtext {
+      font-size: 13px;
+      color: var(--text-secondary, #a1a1aa);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--bg-surface, #18181b);
+      border: 1px solid var(--border-medium, #3f3f46);
+      color: var(--text-primary, #fff);
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.25s ease;
+    }
+
+    /* ========================================================
+       RESPONSIVE DESIGN (Mobile, Tablet & Large Screens)
+       ======================================================== */
+    @media (max-width: 900px) {
+      .site-nav {
+        padding: 12px 16px;
+      }
+      .nav-ticker-bar {
+        display: none;
+      }
+      .hero-panel {
+        padding: 24px 18px;
+      }
+      .hero-headline {
+        font-size: 24px;
+      }
+      .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .loop-flow {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .loop-arrow {
+        align-self: center;
+        transform: rotate(90deg);
+      }
+      .orders-grid {
+        grid-template-columns: 1fr;
+      }
+      .sell-panel {
+        padding: 24px 18px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .site-nav {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .nav-brand-group {
+        gap: 8px;
+      }
+      .brand-title {
+        font-size: 14px;
+      }
+      .brand-flame-tag {
+        font-size: 10px;
+        padding: 2px 6px;
+      }
+      .nav-actions-group {
+        gap: 6px;
+      }
+      .nav-action-link span {
+        display: none;
+      }
+      .nav-action-link {
+        padding: 6px 8px;
+      }
+      .btn-connect-wallet {
+        padding: 6px 12px;
+        font-size: 11px;
+      }
+      .main-content {
+        padding: 16px 12px 60px;
+      }
+      .hero-panel {
+        padding: 18px 14px;
+        border-radius: 10px;
+      }
+      .hero-headline {
+        font-size: 20px;
+      }
+      .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .market-tabs-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .market-filter-bar {
+        width: 100%;
+      }
+      .market-search-input {
+        width: 100%;
+      }
+      .market-sort-select {
+        width: 100%;
+      }
+      .order-card {
+        padding: 16px;
+      }
+      .sell-panel {
+        padding: 18px 14px;
+        border-radius: 10px;
+      }
+      .form-input-box input {
+        font-size: 15px;
+      }
+      .modal-card {
+        max-height: 94vh;
+      }
+      .modal-header {
+        padding: 14px 16px;
+      }
+      .modal-body {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="p2p-layout">
+
+    <!-- Top Site Navigation -->
+    <header class="site-nav">
+      <div class="nav-brand-group">
+        <a href="/" class="nav-brand-logo" title="Return to Jev Brain Dashboard">
+          <svg class="brand-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <line x1="12" y1="2" x2="12" y2="6"></line>
+            <line x1="12" y1="18" x2="12" y2="22"></line>
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+            <line x1="2" y1="12" x2="6" y2="12"></line>
+            <line x1="18" y1="12" x2="22" y2="12"></line>
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+          </svg>
+          <span class="brand-title">JEV BRAIN</span>
+        </a>
+        <span class="brand-flame-tag">🔥 BURNING DAY</span>
+      </div>
+
+      <!-- Live DexScreener Ticker -->
+      <div class="nav-ticker-bar">
+        <div class="ticker-item">
+          <span>$JEV:</span>
+          <span class="ticker-val" id="ticker-token-price">Loading...</span>
+        </div>
+        <div class="ticker-item">
+          <span>SOL:</span>
+          <span class="ticker-val" id="ticker-sol-price">Loading...</span>
+        </div>
+        <div class="ticker-item">
+          <span>MCAP:</span>
+          <span class="ticker-val" id="ticker-market-cap">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Navigation & Wallet Actions -->
+      <div class="nav-actions-group">
+        <a href="/" class="nav-action-link" title="Dashboard">Dashboard</a>
+        <a href="/api-keys.html" class="nav-action-link" title="API Keys">API Keys</a>
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <svg id="theme-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg id="theme-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <button class="btn-connect-wallet" id="btn-connect-wallet" onclick="handleWalletAction()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="16" cy="12" r="2"/></svg>
+          <span id="wallet-btn-text">Connect Wallet</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Viewport -->
+    <main class="main-content">
+
+      <!-- VIP Operator Authority Alert Card -->
+      <div class="operator-vip-card" id="operator-vip-card">
+        <div class="operator-vip-info">
+          <span class="operator-badge">MASTER OPERATOR</span>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#fef08a;">VIP Operator Authority Active</div>
+            <div style="font-size:12px;color:#ca8a04;font-family:var(--font-mono, monospace);" id="operator-wallet-display">HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#eab308;font-weight:600;">
+          Full Administrative Override &amp; Force-Refund Permissions Enabled
+        </div>
+      </div>
+
+      <!-- Hero & Flywheel Section -->
+      <section class="hero-panel">
+        <div class="hero-eyebrow">⚡ P2P COMPUTE &amp; PERMANENT TOKEN SINK</div>
+        <h1 class="hero-headline">Burning Day · P2P Credit Trading</h1>
+        <p class="hero-subheadline">
+          Idle credits sitting in a wallet are dead capital. Routing them to someone actually shipping an LLM is a market.
+          List your unused credits at your asking price in SOL. A builder buys inference budget, settles SOL directly to your wallet, and permanently burns $JEVBRAIN on-chain.
+        </p>
+
+        <!-- Mechanism Flywheel Visual -->
+        <div class="loop-flow">
+          <div class="loop-node">1. Unused Credits</div>
+          <span class="loop-arrow">→</span>
+          <div class="loop-node">2. Priced by Seller in SOL</div>
+          <span class="loop-arrow">→</span>
+          <div class="loop-node">3. Builder Buys Compute</div>
+          <span class="loop-arrow">→</span>
+          <div class="loop-node burn">🔥 4. $JEVBRAIN Burned On-Chain</div>
+          <span class="loop-arrow">→</span>
+          <div class="loop-node sol">5. SOL Settled to Seller</div>
+        </div>
+      </section>
+
+      <!-- Global Protocol Metrics Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-title">Available Credits in Market</div>
+          <div class="metric-val" id="stat-active-credits">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Active Listings</div>
+          <div class="metric-val" id="stat-active-listings">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Total Tokens Burned</div>
+          <div class="metric-val burn" id="stat-tokens-burned">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Total Volume Traded</div>
+          <div class="metric-val sol" id="stat-sol-volume">0.00 SOL</div>
+        </div>
+      </div>
+
+      <!-- Tabs & Search Toolbar -->
+      <div class="market-tabs-bar">
+        <div class="market-tabs-group">
+          <button class="market-tab-btn active" id="tab-buy" onclick="switchTab('buy')">
+            <span>⚡ Buy Compute (Orderbook)</span>
+            <span class="tab-badge" id="tab-badge-orders">0</span>
+          </button>
+          <button class="market-tab-btn" id="tab-sell" onclick="switchTab('sell')">
+            <span>➕ List Credits for Sale</span>
+          </button>
+          <button class="market-tab-btn" id="tab-my-orders" onclick="switchTab('my-orders')">
+            <span>My Listings &amp; Escrow</span>
+            <span class="tab-badge" id="tab-badge-my-orders">0</span>
+          </button>
+        </div>
+
+        <div class="market-filter-bar" id="market-filter-bar">
+          <input type="text" class="market-search-input" id="search-seller" placeholder="Filter by seller wallet..." oninput="handleSearchFilter()">
+          <select class="market-sort-select" id="sort-select" onchange="loadOrders()">
+            <option value="price_asc">Lowest Price / 1k Credits</option>
+            <option value="price_desc">Highest Price / 1k Credits</option>
+            <option value="credits_desc">Largest Batches</option>
+            <option value="newest">Newest First</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- VIEW 1: BUY COMPUTE / ACTIVE ORDERBOOK -->
+      <div id="view-buy">
+        <div class="orders-grid" id="orders-container">
+          <!-- Populated dynamically via /api/p2p/orders -->
+          <div style="grid-column: 1/-1; text-align: center; padding: 48px 0; color: var(--text-secondary);">
+            Loading active Burning Day listings from SQLite...
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: SELL CREDITS (LISTING FORM) -->
+      <div id="view-sell" style="display:none;">
+        <div class="sell-panel">
+          <h2 class="sell-headline">List Unused Credits for SOL</h2>
+          <p class="sell-subtext">
+            Set your rate. Your credits are placed into escrow immediately to prevent double-spending in chat inference. When a builder buys, SOL settles directly to your wallet.
+          </p>
+
+          <div style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--text-secondary);">Your Available Credits:</span>
+            <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--accent-cyan);" id="sell-available-credits">0</span>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">
+              <span>Credits to List</span>
+              <span style="font-size:11px;color:var(--text-tertiary);">Minimum: 100</span>
+            </div>
+            <div class="form-input-box">
+              <input type="number" id="input-sell-credits" min="100" step="100" value="2500" oninput="updateSellQuote()">
+              <span class="form-input-unit">CREDITS</span>
+            </div>
+            <div class="preset-chips">
+              <button class="preset-chip" onclick="setSellCredits(1000)">1,000</button>
+              <button class="preset-chip" onclick="setSellCredits(2500)">2,500</button>
+              <button class="preset-chip" onclick="setSellCredits(5000)">5,000</button>
+              <button class="preset-chip" onclick="setSellCredits(10000)">10,000</button>
+              <button class="preset-chip" onclick="setSellCredits('max')">Max Available</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">
+              <span>Asking Price in SOL</span>
+              <span style="font-size:11px;color:var(--text-tertiary);">Settled directly to your wallet</span>
+            </div>
+            <div class="form-input-box">
+              <input type="number" id="input-sell-sol" min="0.001" step="0.001" value="0.025" oninput="updateSellQuote()">
+              <span class="form-input-unit">SOL</span>
+            </div>
+            <div class="preset-chips">
+              <button class="preset-chip" onclick="setSellSol(0.010)">0.010 SOL</button>
+              <button class="preset-chip" onclick="setSellSol(0.025)">0.025 SOL</button>
+              <button class="preset-chip" onclick="setSellSol(0.050)">0.050 SOL</button>
+              <button class="preset-chip" onclick="setSellSol(0.100)">0.100 SOL</button>
+            </div>
+          </div>
+
+          <!-- Real-Time Quote Calculation Box -->
+          <div class="quote-preview-box">
+            <div class="quote-preview-row">
+              <span style="color:var(--text-secondary);">Effective Rate:</span>
+              <span class="quote-preview-val" id="preview-rate-sol">0.0100 SOL / 1k</span>
+            </div>
+            <div class="quote-preview-row">
+              <span style="color:var(--text-secondary);">USD Rate Equivalent:</span>
+              <span class="quote-preview-val" id="preview-rate-usd">$1.18 / 1k Credits</span>
+            </div>
+            <div class="quote-preview-row">
+              <span style="color:var(--text-secondary);">$JEVBRAIN Required to Burn:</span>
+              <span class="quote-preview-val" style="color:#f97316;" id="preview-tokens-burn">🔥 53,800 $JEVBRAIN</span>
+            </div>
+            <div class="quote-preview-row">
+              <span style="color:var(--text-secondary);">Settlement Destination:</span>
+              <span class="quote-preview-val" style="color:#10b981;" id="preview-seller-addr">Connect Wallet</span>
+            </div>
+          </div>
+
+          <button class="btn-create-listing" id="btn-submit-listing" onclick="submitCreateListing()">
+            🔥 Create Listing &amp; Escrow Credits
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW 3: MY LISTINGS & ESCROW -->
+      <div id="view-my-orders" style="display:none;">
+        <div class="orders-grid" id="my-orders-container">
+          <div style="grid-column: 1/-1; text-align: center; padding: 48px 0; color: var(--text-secondary);">
+            Connect your wallet to view and manage your active credit listings.
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- FULFILL / BUY MODAL -->
+    <div class="modal-overlay" id="buy-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>⚡ Purchase Compute &amp; Burn $JEVBRAIN</h3>
+          <button class="modal-close-btn" onclick="closeBuyModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-body-subtext">
+            To acquire this credit batch, your transaction will deliver native SOL directly to the seller and permanently burn the required $JEVBRAIN tokens on-chain.
+          </p>
+
+          <div style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:10px;padding:16px;margin-bottom:20px;display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-secondary);">Credits Purchased:</span>
+              <span style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--text-primary);" id="modal-credits-amt">5,000 Credits</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-secondary);">SOL Price to Seller:</span>
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:#10b981;" id="modal-sol-price">0.050 SOL</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-secondary);">Seller Address:</span>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);" id="modal-seller-wallet">GX3W...g2Tp</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-secondary);">Tokens to Burn:</span>
+              <span style="font-family:var(--font-mono);font-size:14px;font-weight:700;color:#f97316;" id="modal-tokens-burn">🔥 108,000 $JEVBRAIN</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--text-tertiary);">Burn Destination:</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);">11111111111111111111111111111111 (Dead)</span>
+            </div>
+          </div>
+
+          <!-- Jupiter 1-Click Swap Option -->
+          <div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.25);border-radius:8px;padding:8px 12px;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <span style="color:var(--text-secondary);">Need $JEVBRAIN tokens to burn?</span>
+            <a href="https://jup.ag/swap/SOL-AxwSUUHx6hj8bgdtSxVUiKtKkZwmcDbNbEEtTvzfpump" target="_blank" rel="noopener" style="color:#f97316;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:4px;">
+              Swap on Jupiter ↗
+            </a>
+          </div>
+
+          <!-- Settlement Mode Selector -->
+          <div style="display:flex;gap:6px;margin-bottom:14px;">
+            <button class="btn-ghost-sm" id="btn-mode-sol" onclick="setFulfillMode('sol')" style="flex:1;background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981;font-weight:600;">⚡ 1-Click Pay SOL</button>
+            <button class="btn-ghost-sm" id="btn-mode-burn" onclick="setFulfillMode('burn')" style="flex:1;background:transparent;border-color:var(--border-subtle);color:var(--text-secondary);">🔥 Burn $JEV</button>
+            <button class="btn-ghost-sm" id="btn-mode-manual" onclick="setFulfillMode('manual')" style="flex:1;background:transparent;border-color:var(--border-subtle);color:var(--text-secondary);">🔗 Paste Tx</button>
+          </div>
+
+          <!-- Mode SOL: 1-Click Native SOL Transfer to Seller -->
+          <div id="fulfill-sol-pane">
+            <button class="btn-create-listing" id="btn-execute-sol" onclick="executePhantomPurchase('sol')" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
+              ⚡ Pay SOL to Seller via Phantom
+            </button>
+            <div style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:10px;">
+              Direct peer-to-peer settlement. SOL transfers directly to seller wallet; compute credits deliver immediately upon confirmation.
+            </div>
+          </div>
+
+          <!-- Mode Burn: SPL Token Burn on-chain -->
+          <div id="fulfill-burn-pane" style="display:none;">
+            <button class="btn-create-listing" id="btn-execute-burn" onclick="executePhantomPurchase('burn')" style="background:linear-gradient(135deg, #f97316 0%, #ea580c 100%);">
+              🔥 Burn $JEVBRAIN Tokens via Phantom
+            </button>
+            <div style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:10px;">
+              Permanently burns required $JEVBRAIN tokens on-chain to the dead address.
+            </div>
+          </div>
+
+          <!-- Manual Hash Mode -->
+          <div id="fulfill-manual-pane" style="display:none;">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label class="form-label">Solana Transaction Signature (Tx Hash)</label>
+              <div class="form-input-box">
+                <input type="text" id="manual-tx-sig" placeholder="e.g. 5K3W...9pQz" style="font-size:12px;">
+              </div>
+            </div>
+            <button class="btn-create-listing" id="btn-execute-manual" onclick="executeManualVerification()">
+              Verify On-Chain &amp; Claim Credits
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+  </div>
+
+  <!-- Client-Side Engine Script -->
+  <script>
+    // State
+    let currentWallet = null;
+    let allOrders = [];
+    let activeTab = 'buy';
+    let selectedOrder = null;
+    let fulfillMode = 'phantom';
+    let marketStats = null;
+
+    // Toast Notification Utility
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      const icon = type === 'success' 
+        ? '<span style="color:#10b981;">✔</span>' 
+        : (type === 'error' ? '<span style="color:#ef4444;">✖</span>' : '<span style="color:#f97316;">🔥</span>');
+      toast.innerHTML = `${icon} <span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 250);
+      }, 4000);
+    }
+
+    // Theme Switcher Logic
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const sunIcon = document.getElementById('theme-icon-sun');
+    const moonIcon = document.getElementById('theme-icon-moon');
+
+    function syncThemeIcons(theme) {
+      if (theme === 'light') {
+        sunIcon.style.display = 'block';
+        moonIcon.style.display = 'none';
+      } else {
+        sunIcon.style.display = 'none';
+        moonIcon.style.display = 'block';
+      }
+    }
+    syncThemeIcons(document.documentElement.getAttribute('data-theme') || 'dark');
+
+    themeBtn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('jev_theme', next);
+      syncThemeIcons(next);
+    });
+
+    // Session helpers
+    function getSessionToken() {
+      return localStorage.getItem('jev_session_token') || 
+             sessionStorage.getItem('jev_session_token') || 
+             localStorage.getItem('jevbrain_session_token') || '';
+    }
+
+    function authHeaders(extra = {}) {
+      const headers = { ...extra };
+      const token = getSessionToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return headers;
+    }
+
+    function isOperatorWallet(address) {
+      if (!address) return false;
+      return address === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn';
+    }
+
+    // Wallet Connection Handling
+    async function handleWalletAction() {
+      if (currentWallet) {
+        // Disconnect
+        currentWallet = null;
+        localStorage.removeItem('jev_session_token');
+        localStorage.removeItem('jevbrain_session_token');
+        sessionStorage.removeItem('jev_session_token');
+        localStorage.removeItem('jev_wallet_address');
+        localStorage.removeItem('jevbrain_wallet');
+        sessionStorage.removeItem('jev_wallet_address');
+        updateWalletUi();
+        loadOrders();
+        showToast('Wallet disconnected', 'info');
+        return;
+      }
+
+      await authenticateWallet();
+    }
+
+    async function authenticateWallet() {
+      try {
+        const provider = window.solana || window.phantom?.solana;
+        if (!provider) {
+          showToast('Phantom wallet extension not detected.', 'error');
+          window.open('https://phantom.app', '_blank');
+          return false;
+        }
+
+        const resp = await provider.connect();
+        const address = (resp?.publicKey || provider.publicKey).toString();
+        currentWallet = address;
+        localStorage.setItem('jev_wallet_address', address);
+        localStorage.setItem('jevbrain_wallet', address);
+
+        // Operator VIP instant bypass
+        if (isOperatorWallet(address)) {
+          const vipKey = `jev_live_vip_${address}`;
+          localStorage.setItem('jev_session_token', vipKey);
+          localStorage.setItem('jevbrain_session_token', vipKey);
+          sessionStorage.setItem('jev_session_token', vipKey);
+          showToast(`👑 VIP Operator Authority Activated (${address.slice(0, 4)}...${address.slice(-4)})`, 'success');
+        } else {
+          // Standard login signature flow
+          try {
+            const nonceRes = await fetch(`/api/wallet/nonce?address=${encodeURIComponent(address)}`);
+            const nonceData = await nonceRes.json();
+            if (nonceRes.ok && nonceData.message) {
+              const encoded = new TextEncoder().encode(nonceData.message);
+              const signed = await (provider.signMessage ? provider.signMessage(encoded, 'utf8') : provider.request({ method: 'signMessage', params: { message: encoded } }));
+              
+              // Format signature in base58
+              const sigBytes = signed.signature || signed;
+              const b58 = toBase58(sigBytes);
+
+              const verifyRes = await fetch('/api/wallet/verify-signature', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address, signature: b58, message: nonceData.message })
+              });
+              const vData = await verifyRes.json();
+              if (vData.sessionToken) {
+                localStorage.setItem('jev_session_token', vData.sessionToken);
+                localStorage.setItem('jevbrain_session_token', vData.sessionToken);
+                sessionStorage.setItem('jev_session_token', vData.sessionToken);
+              }
+            }
+          } catch (signErr) {
+            console.warn('Sign-in challenge warning:', signErr.message);
+          }
+          showToast(`Wallet connected: ${address.slice(0, 4)}...${address.slice(-4)}`, 'success');
+        }
+
+        updateWalletUi();
+        loadUserCreditBalance();
+        loadOrders();
+        return true;
+      } catch (err) {
+        showToast(err.message, 'error');
+        return false;
+      }
+    }
+
+    function toBase58(bytes) {
+      const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+      let num = 0n;
+      for (let i = 0; i < bytes.length; i++) {
+        num = num * 256n + BigInt(bytes[i]);
+      }
+      let str = '';
+      while (num > 0n) {
+        const rem = Number(num % 58n);
+        num = num / 58n;
+        str = ALPHABET[rem] + str;
+      }
+      for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
+        str = '1' + str;
+      }
+      return str;
+    }
+
+    function updateWalletUi() {
+      const btn = document.getElementById('btn-connect-wallet');
+      const text = document.getElementById('wallet-btn-text');
+      const opCard = document.getElementById('operator-vip-card');
+      const sellerDisplay = document.getElementById('preview-seller-addr');
+
+      if (currentWallet) {
+        btn.classList.add('connected');
+        text.textContent = `${currentWallet.slice(0, 4)}...${currentWallet.slice(-4)}`;
+        sellerDisplay.textContent = `${currentWallet.slice(0, 4)}...${currentWallet.slice(-4)}`;
+
+        if (isOperatorWallet(currentWallet)) {
+          opCard.classList.add('active');
+          document.getElementById('operator-wallet-display').textContent = currentWallet;
+        } else {
+          opCard.classList.remove('active');
+        }
+      } else {
+        btn.classList.remove('connected');
+        text.textContent = 'Connect Wallet';
+        sellerDisplay.textContent = 'Connect Wallet';
+        opCard.classList.remove('active');
+      }
+
+      if (typeof updateBuyModalUi === 'function') {
+        updateBuyModalUi();
+      }
+    }
+
+    // Auto-reconnect stored wallet
+    async function checkExistingSession() {
+      const stored = localStorage.getItem('jev_wallet_address') || localStorage.getItem('jevbrain_wallet') || sessionStorage.getItem('jev_wallet_address');
+      if (stored) {
+        currentWallet = stored;
+        updateWalletUi();
+        loadUserCreditBalance();
+      } else if (window.solana && window.solana.isPhantom && window.solana.publicKey) {
+        currentWallet = window.solana.publicKey.toString();
+        localStorage.setItem('jev_wallet_address', currentWallet);
+        localStorage.setItem('jevbrain_wallet', currentWallet);
+        updateWalletUi();
+        loadUserCreditBalance();
+      }
+    }
+
+    // Fetch user available credits
+    async function loadUserCreditBalance() {
+      if (!currentWallet) return;
+      try {
+        const res = await fetch(`/api/credits/balance?wallet=${encodeURIComponent(currentWallet)}`, {
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        const avail = data.available || 0;
+        document.getElementById('sell-available-credits').textContent = Number(avail).toLocaleString();
+      } catch {}
+    }
+
+    // Fetch live market stats & ticker
+    async function loadMarketStats() {
+      try {
+        const res = await fetch('/api/p2p/stats');
+        const data = await res.json();
+        if (data.success && data.stats) {
+          marketStats = data.stats;
+          document.getElementById('stat-active-credits').textContent = Number(marketStats.totalCreditsActive).toLocaleString();
+          document.getElementById('stat-active-listings').textContent = marketStats.activeListingsCount;
+          document.getElementById('stat-tokens-burned').textContent = `🔥 ${Number(marketStats.totalTokensBurnedUi).toLocaleString()}`;
+          document.getElementById('stat-sol-volume').textContent = `${Number(marketStats.totalSolVolume).toFixed(3)} SOL`;
+
+          document.getElementById('ticker-token-price').textContent = `$${Number(marketStats.tokenPriceUsd).toFixed(6)}`;
+          document.getElementById('ticker-sol-price').textContent = `$${Number(marketStats.solPriceUsd).toFixed(2)}`;
+          document.getElementById('ticker-market-cap').textContent = `$${Math.round(marketStats.marketCapUsd).toLocaleString()}`;
+        }
+      } catch (err) {
+        console.warn('Stats fetch warning:', err.message);
+      }
+    }
+
+    // Tab Switching
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById('tab-buy').classList.toggle('active', tab === 'buy');
+      document.getElementById('tab-sell').classList.toggle('active', tab === 'sell');
+      document.getElementById('tab-my-orders').classList.toggle('active', tab === 'my-orders');
+
+      document.getElementById('view-buy').style.display = tab === 'buy' ? 'block' : 'none';
+      document.getElementById('view-sell').style.display = tab === 'sell' ? 'block' : 'none';
+      document.getElementById('view-my-orders').style.display = tab === 'my-orders' ? 'block' : 'none';
+
+      document.getElementById('market-filter-bar').style.display = tab === 'buy' ? 'flex' : 'none';
+
+      if (tab === 'buy') loadOrders();
+      if (tab === 'sell') {
+        loadUserCreditBalance();
+        updateSellQuote();
+      }
+      if (tab === 'my-orders') loadMyOrders();
+    }
+
+    // Load active marketplace orders
+    async function loadOrders() {
+      const sort = document.getElementById('sort-select').value;
+      const search = (document.getElementById('search-seller').value || '').trim();
+
+      try {
+        let url = `/api/p2p/orders?status=ACTIVE&sort=${encodeURIComponent(sort)}`;
+        if (search) url += `&seller=${encodeURIComponent(search)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        allOrders = data.orders || [];
+
+        document.getElementById('tab-badge-orders').textContent = allOrders.length;
+        renderOrdersGrid(allOrders, 'orders-container');
+      } catch (err) {
+        document.getElementById('orders-container').innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 32px;">
+            Failed to load listings: ${err.message}
+          </div>
+        `;
+      }
+    }
+
+    // Load my listings
+    async function loadMyOrders() {
+      if (!currentWallet) {
+        document.getElementById('my-orders-container').innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 48px 0; color: var(--text-secondary);">
+            Connect your Solana wallet to view and manage your active credit listings.
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/p2p/orders?seller=${encodeURIComponent(currentWallet)}`);
+        const data = await res.json();
+        const myOrders = data.orders || [];
+
+        document.getElementById('tab-badge-my-orders').textContent = myOrders.length;
+        renderOrdersGrid(myOrders, 'my-orders-container', true);
+      } catch (err) {
+        document.getElementById('my-orders-container').innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 32px;">
+            Failed to load your listings: ${err.message}
+          </div>
+        `;
+      }
+    }
+
+    // Render Order Cards
+    function renderOrdersGrid(orders, containerId, isMyView = false) {
+      const container = document.getElementById(containerId);
+      if (!orders || orders.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 48px 0; color: var(--text-secondary);">
+            ${isMyView ? 'You have no active listings.' : 'No active listings found matching criteria.'}
+          </div>
+        `;
+        return;
+      }
+
+      const html = orders.map(o => {
+        const isMine = currentWallet && o.sellerWallet === currentWallet;
+        const isOp = isOperatorWallet(currentWallet);
+        const rateSol = (o.priceSol / o.creditsAmount) * 1000;
+        const solPrice = marketStats?.solPriceUsd || 140;
+        const rateUsd = rateSol * solPrice;
+
+        let actionButton = '';
+        if (isMine) {
+          actionButton = `
+            <button class="btn-cancel-order" onclick="cancelOrder('${o.orderId}')">
+              Cancel &amp; Refund Escrow
+            </button>
+          `;
+        } else if (isOp) {
+          actionButton = `
+            <div style="display:flex;gap:8px;">
+              <button class="btn-buy-order" onclick="openBuyModal('${o.orderId}')" style="flex:1;">
+                ⚡ Buy Compute
+              </button>
+              <button class="btn-cancel-order" onclick="cancelOrder('${o.orderId}')" style="padding:10px 12px;" title="Operator Force Cancel">
+                👑 Cancel
+              </button>
+            </div>
+          `;
+        } else {
+          actionButton = `
+            <button class="btn-buy-order" onclick="openBuyModal('${o.orderId}')">
+              ⚡ Buy Compute &amp; Burn
+            </button>
+          `;
+        }
+
+        return `
+          <div class="order-card">
+            <div>
+              <div class="order-card-header">
+                <a href="https://solscan.io/account/${o.sellerWallet}" target="_blank" class="order-seller-badge" title="View seller on Solscan">
+                  <span>Seller: ${o.sellerWallet.slice(0, 4)}...${o.sellerWallet.slice(-4)}</span>
+                  <span>↗</span>
+                </a>
+                <span class="order-status-badge">${o.status}</span>
+              </div>
+
+              <div style="margin: 16px 0 14px;">
+                <div class="order-compute-val">
+                  <span>${o.creditsAmount.toLocaleString()}</span>
+                  <span class="order-compute-unit">CREDITS</span>
+                </div>
+              </div>
+
+              <div class="order-meta-box">
+                <div class="order-meta-row">
+                  <span class="order-meta-label">Asking Price:</span>
+                  <span class="order-meta-val price">${o.priceSol} SOL</span>
+                </div>
+                <div class="order-meta-row">
+                  <span class="order-meta-label">Rate / 1k Credits:</span>
+                  <span class="order-meta-val">${rateSol.toFixed(4)} SOL ($${rateUsd.toFixed(2)})</span>
+                </div>
+                <div class="order-meta-row">
+                  <span class="order-meta-label">Tokens to Burn:</span>
+                  <span class="order-meta-val burn">🔥 ${o.tokensToBurnUi.toLocaleString()} $JEV</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              ${actionButton}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    function handleSearchFilter() {
+      loadOrders();
+    }
+
+    // Sell Form Helpers
+    function setSellCredits(val) {
+      const input = document.getElementById('input-sell-credits');
+      if (val === 'max') {
+        const availText = document.getElementById('sell-available-credits').textContent.replace(/,/g, '');
+        input.value = Math.max(100, parseInt(availText, 10) || 100);
+      } else {
+        input.value = val;
+      }
+      updateSellQuote();
+    }
+
+    function setSellSol(val) {
+      document.getElementById('input-sell-sol').value = val;
+      updateSellQuote();
+    }
+
+    async function updateSellQuote() {
+      const credits = parseInt(document.getElementById('input-sell-credits').value, 10) || 1000;
+      const sol = parseFloat(document.getElementById('input-sell-sol').value) || 0.01;
+
+      try {
+        const res = await fetch(`/api/p2p/quote?credits=${credits}&sol=${sol}`);
+        const q = await res.json();
+        if (q.success) {
+          document.getElementById('preview-rate-sol').textContent = `${q.rateSolPer1kCredits.toFixed(4)} SOL / 1k`;
+          document.getElementById('preview-rate-usd').textContent = `$${q.rateUsdPer1kCredits.toFixed(2)} / 1k Credits`;
+          document.getElementById('preview-tokens-burn').textContent = `🔥 ${q.tokensToBurnUi.toLocaleString()} $JEVBRAIN`;
+        }
+      } catch {}
+    }
+
+    // Submit Create Listing
+    async function submitCreateListing() {
+      if (!currentWallet) {
+        showToast('Please connect your Phantom wallet first.', 'error');
+        await authenticateWallet();
+        return;
+      }
+
+      if (!getSessionToken()) {
+        showToast('Please sign the authentication message in Phantom to list credits.', 'info');
+        const ok = await authenticateWallet();
+        if (!ok || !getSessionToken()) {
+          showToast('Authentication is required to create a listing.', 'error');
+          return;
+        }
+      }
+
+      const credits = parseInt(document.getElementById('input-sell-credits').value, 10);
+      const sol = parseFloat(document.getElementById('input-sell-sol').value);
+
+      if (!credits || credits < 100) {
+        showToast('Minimum listing amount is 100 credits.', 'error');
+        return;
+      }
+      if (!sol || sol < 0.001) {
+        showToast('Minimum price is 0.001 SOL.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-listing');
+      btn.disabled = true;
+      btn.textContent = 'Escrowing credits...';
+
+      try {
+        const res = await fetch('/api/p2p/orders/create', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            sellerWallet: currentWallet,
+            creditsAmount: credits,
+            priceSol: sol
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Failed to create listing');
+        }
+
+        showToast(`Successfully listed ${credits.toLocaleString()} credits for ${sol} SOL!`, 'success');
+        loadUserCreditBalance();
+        loadMarketStats();
+        switchTab('buy');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔥 Create Listing & Escrow Credits';
+      }
+    }
+
+    // Cancel Listing
+    async function cancelOrder(orderId) {
+      if (!confirm('Are you sure you want to cancel this listing? All escrowed credits will be returned to the seller available balance.')) {
+        return;
+      }
+
+      if (!currentWallet) {
+        showToast('Please connect your wallet first.', 'error');
+        await authenticateWallet();
+        return;
+      }
+
+      if (!getSessionToken()) {
+        showToast('Please sign the authentication message in Phantom to cancel listing.', 'info');
+        const ok = await authenticateWallet();
+        if (!ok) return;
+      }
+
+      try {
+        const res = await fetch('/api/p2p/orders/cancel', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            orderId,
+            callerWallet: currentWallet
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Cancellation failed');
+        }
+
+        showToast('Listing cancelled and credits refunded successfully!', 'success');
+        loadUserCreditBalance();
+        loadMarketStats();
+        if (activeTab === 'my-orders') loadMyOrders();
+        else loadOrders();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // Buy Modal Controls
+    function updateBuyModalUi() {
+      const btn = document.getElementById('btn-execute-phantom');
+      if (!btn) return;
+      if (!currentWallet) {
+        btn.textContent = 'Connect Phantom Wallet to Buy';
+        btn.style.background = 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)';
+      } else {
+        btn.textContent = '⚡ Execute 1-Click Purchase via Phantom';
+        btn.style.background = 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)';
+      }
+    }
+
+    function openBuyModal(orderId) {
+      selectedOrder = allOrders.find(o => o.orderId === orderId);
+      if (!selectedOrder) return;
+
+      document.getElementById('modal-credits-amt').textContent = `${selectedOrder.creditsAmount.toLocaleString()} Credits`;
+      document.getElementById('modal-sol-price').textContent = `${selectedOrder.priceSol} SOL`;
+      document.getElementById('modal-seller-wallet').textContent = `${selectedOrder.sellerWallet.slice(0, 4)}...${selectedOrder.sellerWallet.slice(-4)}`;
+      document.getElementById('modal-tokens-burn').textContent = `🔥 ${selectedOrder.tokensToBurnUi.toLocaleString()} $JEVBRAIN`;
+
+      updateBuyModalUi();
+      setFulfillMode('burn');
+      document.getElementById('buy-modal').classList.add('active');
+    }
+
+    function closeBuyModal() {
+      document.getElementById('buy-modal').classList.remove('active');
+      selectedOrder = null;
+    }
+
+    function setFulfillMode(mode) {
+      fulfillMode = mode;
+      const btnSol = document.getElementById('btn-mode-sol');
+      const btnBurn = document.getElementById('btn-mode-burn');
+      const btnManual = document.getElementById('btn-mode-manual');
+      const paneSol = document.getElementById('fulfill-sol-pane');
+      const paneBurn = document.getElementById('fulfill-burn-pane');
+      const paneManual = document.getElementById('fulfill-manual-pane');
+
+      const resetBtn = (b) => {
+        if (!b) return;
+        b.style.background = 'transparent';
+        b.style.borderColor = 'var(--border-subtle)';
+        b.style.color = 'var(--text-secondary)';
+      };
+
+      resetBtn(btnSol);
+      resetBtn(btnBurn);
+      resetBtn(btnManual);
+      if (paneSol) paneSol.style.display = 'none';
+      if (paneBurn) paneBurn.style.display = 'none';
+      if (paneManual) paneManual.style.display = 'none';
+
+      if (mode === 'sol') {
+        if (btnSol) {
+          btnSol.style.background = 'rgba(16,185,129,0.15)';
+          btnSol.style.borderColor = '#10b981';
+          btnSol.style.color = '#10b981';
+        }
+        if (paneSol) paneSol.style.display = 'block';
+      } else if (mode === 'burn') {
+        if (btnBurn) {
+          btnBurn.style.background = 'rgba(249,115,22,0.15)';
+          btnBurn.style.borderColor = '#f97316';
+          btnBurn.style.color = '#f97316';
+        }
+        if (paneBurn) paneBurn.style.display = 'block';
+      } else {
+        if (btnManual) {
+          btnManual.style.background = 'rgba(56,189,248,0.15)';
+          btnManual.style.borderColor = '#38bdf8';
+          btnManual.style.color = '#38bdf8';
+        }
+        if (paneManual) paneManual.style.display = 'block';
+      }
+    }
+
+    // Buy Modal Controls
+    function updateBuyModalUi() {
+      const btnSol = document.getElementById('btn-execute-sol');
+      const btnBurn = document.getElementById('btn-execute-burn');
+      if (btnSol) {
+        btnSol.textContent = currentWallet
+          ? `⚡ Pay ${selectedOrder ? selectedOrder.priceSol : ''} SOL to Seller via Phantom`
+          : 'Connect Phantom Wallet to Buy';
+      }
+      if (btnBurn) {
+        btnBurn.textContent = currentWallet
+          ? `🔥 Burn ${selectedOrder ? selectedOrder.tokensToBurnUi.toLocaleString() : ''} $JEV Tokens`
+          : 'Connect Phantom Wallet to Burn';
+      }
+    }
+
+    // 1-Click Phantom Purchase via Solana Web3
+    async function executePhantomPurchase(method = 'sol') {
+      if (!selectedOrder) return;
+      const provider = window.solana || window.phantom?.solana;
+      if (!provider) {
+        showToast('Phantom wallet extension is required for 1-click purchase.', 'error');
+        window.open('https://phantom.app', '_blank');
+        return;
+      }
+
+      if (!currentWallet) {
+        showToast('Connecting Phantom wallet...', 'info');
+        const connected = await authenticateWallet();
+        if (!connected) return;
+        updateBuyModalUi();
+      }
+
+      const activeBtn = method === 'burn'
+        ? document.getElementById('btn-execute-burn')
+        : document.getElementById('btn-execute-sol');
+
+      if (activeBtn) {
+        activeBtn.disabled = true;
+        activeBtn.textContent = 'Building Solana transaction...';
+      }
+
+      try {
+        if (!window.solanaWeb3) {
+          throw new Error('Solana Web3 runtime not ready. Please refresh or use manual transaction hash.');
+        }
+
+        const buyerPubkey = new window.solanaWeb3.PublicKey(currentWallet);
+        const sellerPubkey = new window.solanaWeb3.PublicKey(selectedOrder.sellerWallet);
+        const tx = new window.solanaWeb3.Transaction();
+        tx.feePayer = buyerPubkey;
+
+        if (method === 'sol') {
+          // Native SOL transfer directly to seller wallet
+          const lamports = BigInt(selectedOrder.priceLamports);
+          const solIx = window.solanaWeb3.SystemProgram.transfer({
+            fromPubkey: buyerPubkey,
+            toPubkey: sellerPubkey,
+            lamports: lamports
+          });
+          tx.add(solIx);
+        } else {
+          // SPL Token-2022 Burn of $JEVBRAIN from buyer's Token-2022 ATA
+          const mintPubkey = new window.solanaWeb3.PublicKey('AxwSUUHx6hj8bgdtSxVUiKtKkZwmcDbNbEEtTvzfpump');
+          const TOKEN_2022_PROGRAM_ID = new window.solanaWeb3.PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+          const ASSOCIATED_TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+          const [buyerAta] = window.solanaWeb3.PublicKey.findProgramAddressSync(
+            [buyerPubkey.toBuffer(), TOKEN_2022_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+            ASSOCIATED_TOKEN_PROGRAM_ID
+          );
+
+          const burnData = new Uint8Array(9);
+          burnData[0] = 8; // Instruction index 8: Burn
+          const view = new DataView(burnData.buffer);
+          view.setBigUint64(1, BigInt(selectedOrder.tokensToBurnRaw), true);
+
+          const burnIx = new window.solanaWeb3.TransactionInstruction({
+            keys: [
+              { pubkey: buyerAta, isSigner: false, isWritable: true },
+              { pubkey: mintPubkey, isSigner: false, isWritable: true },
+              { pubkey: buyerPubkey, isSigner: true, isWritable: false },
+            ],
+            programId: TOKEN_2022_PROGRAM_ID,
+            data: burnData
+          });
+          tx.add(burnIx);
+        }
+
+        // Lock order into PURCHASE_PENDING to prevent race conditions
+        try {
+          await fetch('/api/p2p/orders/lock', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              orderId: selectedOrder.orderId,
+              buyerWallet: currentWallet
+            })
+          });
+        } catch (lockErr) {}
+
+        if (activeBtn) activeBtn.textContent = 'Fetching network blockhash...';
+        const bhRes = await fetch('/api/solana/latest-blockhash');
+        const bhData = await bhRes.json();
+        if (!bhData.success || !bhData.blockhash) {
+          throw new Error('Unable to retrieve recent blockhash from Solana RPC');
+        }
+        tx.recentBlockhash = bhData.blockhash;
+
+        if (activeBtn) activeBtn.textContent = 'Approve in Phantom wallet...';
+        showToast(`Please approve ${method === 'sol' ? `${selectedOrder.priceSol} SOL transfer` : 'token burn'} in Phantom...`, 'info');
+
+        const sendResult = await provider.signAndSendTransaction(tx);
+        let txSig = typeof sendResult === 'string' ? sendResult : (sendResult?.signature || sendResult);
+        if (txSig instanceof Uint8Array || Array.isArray(txSig)) {
+          txSig = toBase58(txSig);
+        }
+
+        if (!txSig) {
+          throw new Error('Transaction was signed but signature was not returned by Phantom.');
+        }
+
+        showToast(`Transaction broadcasted: ${txSig.slice(0, 8)}... Awaiting on-chain confirmation...`, 'success');
+        if (activeBtn) activeBtn.textContent = 'Verifying on-chain settlement...';
+
+        // Pre-fill manual tx input in case of latency
+        const manualInput = document.getElementById('manual-tx-sig');
+        if (manualInput) manualInput.value = txSig;
+
+        // Poll fulfillment endpoint with retries
+        let fulfilled = false;
+        let lastErr = '';
+        for (let attempt = 1; attempt <= 7; attempt++) {
+          try {
+            if (activeBtn) activeBtn.textContent = `Verifying on-chain confirmation (${attempt}/7)...`;
+            await new Promise(r => setTimeout(r, 4000));
+
+            const fRes = await fetch('/api/p2p/orders/fulfill', {
+              method: 'POST',
+              headers: authHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({
+                orderId: selectedOrder.orderId,
+                buyerWallet: currentWallet,
+                txSignature: txSig
+              })
+            });
+
+            const fData = await fRes.json();
+            if (fRes.ok && fData.success) {
+              fulfilled = true;
+              const burnSigLink = fData.jevBurnSignature ? `<br><a href="https://solscan.io/tx/${fData.jevBurnSignature}" target="_blank" rel="noopener" style="color:#f97316;text-decoration:underline;">View Burn Tx on Solscan ↗</a>` : '';
+              const payoutSigLink = fData.solPayoutSignature ? `<br><a href="https://solscan.io/tx/${fData.solPayoutSignature}" target="_blank" rel="noopener" style="color:#10b981;text-decoration:underline;">View SOL Payout Tx on Solscan ↗</a>` : '';
+              showToast(`🎉 Success! ${selectedOrder.creditsAmount.toLocaleString()} credits delivered to ${currentWallet.slice(0, 4)}...${currentWallet.slice(-4)}!${burnSigLink}${payoutSigLink}`, 'success');
+              closeBuyModal();
+              loadUserCreditBalance();
+              loadMarketStats();
+              loadOrders();
+              break;
+            } else {
+              lastErr = fData.error || 'Pending on-chain confirmation...';
+            }
+          } catch (e) {
+            lastErr = e.message;
+          }
+        }
+
+        if (!fulfilled) {
+          setFulfillMode('manual');
+          if (manualInput) manualInput.value = txSig;
+          showToast(`Transaction broadcasted (${txSig.slice(0, 8)}...). Click 'Verify On-Chain' once finalized: ${lastErr}`, 'info');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        if (activeBtn) activeBtn.disabled = false;
+        updateBuyModalUi();
+      }
+    }
+
+    // Manual Verification
+    async function executeManualVerification() {
+      if (!selectedOrder) return;
+      const sig = (document.getElementById('manual-tx-sig').value || '').trim();
+      if (!sig) {
+        showToast('Please enter the Solana transaction signature.', 'error');
+        return;
+      }
+
+      if (!currentWallet) {
+        showToast('Please connect your wallet first.', 'error');
+        await authenticateWallet();
+        if (!currentWallet) return;
+      }
+
+      const btn = document.getElementById('btn-execute-manual');
+      btn.disabled = true;
+      btn.textContent = 'Verifying on-chain settlement...';
+
+      try {
+        const res = await fetch('/api/p2p/orders/fulfill', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            orderId: selectedOrder.orderId,
+            buyerWallet: currentWallet,
+            txSignature: sig
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Verification failed');
+        }
+
+        showToast(`🎉 Success! ${selectedOrder.creditsAmount.toLocaleString()} credits delivered to your account!`, 'success');
+        closeBuyModal();
+        loadUserCreditBalance();
+        loadMarketStats();
+        loadOrders();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verify On-Chain & Claim Credits';
+      }
+    }
+
+    // Initialize Page
+    window.addEventListener('DOMContentLoaded', async () => {
+      await checkExistingSession();
+      await loadMarketStats();
+      await loadOrders();
+      updateSellQuote();
+
+      // Refresh stats every 20 seconds
+      setInterval(loadMarketStats, 20000);
+    });
+  </script>
+</body>
+</html>

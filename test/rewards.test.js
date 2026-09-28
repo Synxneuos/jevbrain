@@ -26,6 +26,7 @@ import {
   LAMPORTS_PER_CREDIT,
   MIN_REDEMPTION_CREDITS
 } from '../src/core/credit-engine.js';
+import { dbAdapter } from '../src/core/db-adapter.js';
 import {
   getPendingTransfers,
   isValidSolanaSignature
@@ -85,19 +86,23 @@ test('Solana Holder Eligibility: verifies valid address format and rejects corru
 test('Solana Holder Eligibility: deterministic holding tier resolution', () => {
   const whale = resolveHolderTier(1_500_000);
   assert.strictEqual(whale.tierName, 'Dynasty Magnate');
-  assert.strictEqual(whale.creditRatePerHour, 2500);
+  assert.strictEqual(whale.creditRatePer15Min, 2500);
+  assert.strictEqual(whale.creditRatePerHour, 10000);
 
   const director = resolveHolderTier(250_000);
   assert.strictEqual(director.tierName, 'Syndicate Director');
-  assert.strictEqual(director.creditRatePerHour, 750);
+  assert.strictEqual(director.creditRatePer15Min, 750);
+  assert.strictEqual(director.creditRatePerHour, 3000);
 
   const partner = resolveHolderTier(15_000);
   assert.strictEqual(partner.tierName, 'Principal Partner');
-  assert.strictEqual(partner.creditRatePerHour, 200);
+  assert.strictEqual(partner.creditRatePer15Min, 200);
+  assert.strictEqual(partner.creditRatePerHour, 800);
 
   const initiate = resolveHolderTier(500);
   assert.strictEqual(initiate.tierName, 'Reserve Initiate');
-  assert.strictEqual(initiate.creditRatePerHour, 10);
+  assert.strictEqual(initiate.creditRatePer15Min, 10);
+  assert.strictEqual(initiate.creditRatePerHour, 40);
 
   const zero = resolveHolderTier(0);
   assert.strictEqual(zero.tierLevel, 0);
@@ -128,7 +133,8 @@ test('Holder Eligibility API: GET /api/holder/eligibility returns accurate tier 
   assert.strictEqual(data.eligible, true);
   assert.strictEqual(data.walletAddress, testWallet.address);
   assert.strictEqual(data.tier, 'Principal Partner');
-  assert.strictEqual(data.creditRatePerHour, 200);
+  assert.strictEqual(data.creditRatePer15Min, 200);
+  assert.strictEqual(data.creditRatePerHour, 800);
   assert.strictEqual(data.tokenMint, OFFICIAL_SOLANA_MINT);
 });
 
@@ -365,4 +371,95 @@ test('Security & Zero Secrets Policy: state and responses contain ZERO private k
   assert.strictEqual(serialized.includes('privateKey'), false);
   assert.strictEqual(serialized.includes('seedPhrase'), false);
   assert.strictEqual(serialized.includes('secretKey'), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. YIELD-STUCK REGRESSION SUITE (RPC outage resilience + atomicity)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Unreachable RPC endpoint → getHolderEligibility returns { eligible:false, error } —
+// the exact production failure mode behind the "yield stuck" reports.
+const DEAD_RPC = ['http://127.0.0.1:1/'];
+
+test('Accrual Resilience: RPC verification outage falls back to last verified DB tier', async () => {
+  const wallet = createTestSolanaWallet();
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  dbAdapter.upsertHolderAccount({
+    walletAddress: wallet.address,
+    tokenBalanceRaw: '1000000000',
+    tokenBalanceUi: 1000,
+    tier: 'Charter Associate',
+    tierLevel: 2,
+    creditRatePerHour: 50,
+    lastVerifiedAt: twoHoursAgo,
+    lastAccrualAt: twoHoursAgo
+  });
+
+  const res = await accrueCreditsForHolder(wallet.address, { rpcUrls: DEAD_RPC });
+
+  // 2 hours elapsed × 50 credits/hr = 100 — accrual must NOT freeze during outage
+  assert.strictEqual(Number(res.accrued), 100, 'DB-tier fallback must keep yield accruing');
+  assert.strictEqual(res.eligibility.usedDbFallback, true);
+  assert.strictEqual(res.effectiveRatePerHour, 50);
+
+  const summary = rewardsStore.getAccountSummary(wallet.address);
+  assert.strictEqual(summary.available, '100');
+});
+
+test('Accrual Resilience: outage without verified history returns paused reason (not "insufficient tokens")', async () => {
+  const wallet = createTestSolanaWallet();
+
+  const res = await accrueCreditsForHolder(wallet.address, { rpcUrls: DEAD_RPC });
+
+  assert.strictEqual(res.accrued, '0');
+  assert.match(res.reason, /verification is temporarily unavailable/i);
+  assert.ok(res.eligibility.error, 'RPC error detail must be preserved for support/debugging');
+});
+
+test('RewardsStore API: ensureAccount/getCreditBalance/creditAccrual shims exist and operate', () => {
+  const wallet = createTestSolanaWallet();
+
+  const account = rewardsStore.ensureAccount(wallet.address);
+  assert.ok(account, 'ensureAccount must return the account record');
+  assert.strictEqual(rewardsStore.getCreditBalance(wallet.address), 0n);
+
+  rewardsStore.creditAccrual(wallet.address, 1000, 'shim_test_grant');
+  assert.strictEqual(rewardsStore.getCreditBalance(wallet.address), 1000n);
+  assert.strictEqual(typeof rewardsStore.getCreditBalance(wallet.address), 'bigint');
+});
+
+test('Accrual Atomicity: ledger failure rolls back accrual clock — retry earns the full window', async () => {
+  const wallet = createTestSolanaWallet();
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  dbAdapter.upsertHolderAccount({
+    walletAddress: wallet.address,
+    tokenBalanceRaw: '1000000000',
+    tokenBalanceUi: 1000,
+    tier: 'Charter Associate',
+    tierLevel: 2,
+    creditRatePerHour: 50,
+    lastVerifiedAt: twoHoursAgo,
+    lastAccrualAt: twoHoursAgo
+  });
+
+  // Simulate a mid-accrual ledger failure (DB error after clock advance)
+  const original = rewardsStore.recordLedgerEntry;
+  rewardsStore.recordLedgerEntry = () => { throw new Error('simulated ledger write failure'); };
+  let threw = false;
+  try {
+    await accrueCreditsForHolder(wallet.address, { rpcUrls: DEAD_RPC });
+  } catch {
+    threw = true;
+  } finally {
+    rewardsStore.recordLedgerEntry = original;
+  }
+  assert.ok(threw, 'Simulated ledger failure must propagate');
+
+  // The clock MUST have rolled back with the failed ledger write
+  const afterFailure = dbAdapter.getHolderAccount(wallet.address);
+  assert.strictEqual(afterFailure.lastAccrualAt, twoHoursAgo, 'Clock must roll back on ledger failure (no lost window)');
+
+  // Retry succeeds and credits the ENTIRE 2-hour window that already "failed"
+  const retry = await accrueCreditsForHolder(wallet.address, { rpcUrls: DEAD_RPC });
+  assert.strictEqual(Number(retry.accrued), 100, 'Retry must re-earn the full rolled-back window');
 });

@@ -35,3 +35,9 @@ data/*.db-shm
 
 .vercel
 .netlify
+.kilo/
+pdoom-ref/
+cinematic-mv/
+public/assets/*.mp4
+*.mp4
+*.zip

@@ -23,6 +23,7 @@ import { apiKeyAuditor } from './workers/api-key-auditor.js';
 import { holderAccrualDaemon } from './workers/holder-accrual-daemon.js';
 import { dbAdapter, DATA_DIR } from './core/db-adapter.js';
 import { getBoostStatus, claimBurnBoost, listBoostTierMatrix, tokensRawToUi, BOOST_LEVELS } from './core/boost-engine.js';
+import { p2pMarketEngine, isP2POperator, fetchLiveSolPriceUsd } from './core/p2p-market-engine.js';
 
 export const isServerless = !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
 export const isTestEnv = process.env.NODE_ENV === 'test' || process.argv.some(a => a.includes('test'));
@@ -180,6 +181,9 @@ function parseSession(req, body = {}, options = {}) {
   // VIP Operator bypass token (e.g. jev_live_vip_<address>)
   if (token.startsWith('jev_live_vip_')) {
     const vipAddress = token.slice('jev_live_vip_'.length).trim();
+    if (vipAddress === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx') {
+      return null; // Compromised key explicitly revoked
+    }
     if (WHITELIST_ADMIN_WALLETS.has(vipAddress)) {
       return {
         v: SESSION_TOKEN_VERSION,
@@ -883,7 +887,9 @@ export async function handleRequest(req, res) {
         if (isValidSolanaAddress(walletAddress)) {
           try {
             await accrueCreditsForHolder(walletAddress);
-          } catch (e) {}
+          } catch (e) {
+            console.warn(`[Credits] Accrual skipped for chat (${walletAddress.slice(0, 4)}...):`, e.message);
+          }
 
           // VIP Operator Auto-Credit Grant: Whitelisted authority always has 1,000,000 available credits
           if (WHITELIST_ADMIN_WALLETS.has(walletAddress)) {
@@ -1190,7 +1196,9 @@ export async function handleRequest(req, res) {
                 rewardsStore.creditAccrual(verifiedAddress, 100_000, 'vip_whitelist_seed');
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn(`[Credits] Post-login accrual/VIP seed skipped for ${verifiedAddress.slice(0, 4)}...:`, e.message);
+          }
         }
         const creditAccount = isSol ? rewardsStore.getAccountSummary(verifiedAddress) : null;
 
@@ -1773,7 +1781,10 @@ export async function handleRequest(req, res) {
             await accrueCreditsForHolder(address, {
               mockBalance: reqMockBalance
             });
-          } catch (e) {}
+          } catch (e) {
+            // FIX: never fail the balance read because accrual errored — but DO log it.
+            console.warn(`[Credits] Accrual skipped for balance read (${address.slice(0, 4)}...):`, e.message);
+          }
         }
         const summary = rewardsStore.getAccountSummary(address);
 
@@ -1917,7 +1928,9 @@ export async function handleRequest(req, res) {
         sendJson(res, 200, {
           success: true,
           ...result,
-          availableCredits: result.account ? Number(result.account.available) : 0,
+          // Early-return paths (paused/ineligible) expose `balance`, not `account` —
+          // fall back so the UI never shows a false 0 available balance.
+          availableCredits: Number((result.account || result.balance)?.available || 0),
           accruedAmount: Number(result.accrued || 0)
         });
       } catch (err) {
@@ -2665,6 +2678,281 @@ export async function handleRequest(req, res) {
       return;
     }
 
+    // ── BURNING DAY P2P CREDIT & TOKEN BURN MARKET ENDPOINTS ───────────────────
+
+    if (url.pathname === '/api/p2p/orders' && req.method === 'GET') {
+      try {
+        const status = url.searchParams.get('status') || 'ACTIVE';
+        const seller = url.searchParams.get('seller');
+        const sort = url.searchParams.get('sort') || 'price_asc';
+        const limit = Number(url.searchParams.get('limit') || 50);
+        const offset = Number(url.searchParams.get('offset') || 0);
+
+        const orders = p2pMarketEngine.listOrders({
+          status,
+          sellerWallet: seller,
+          sort,
+          limit,
+          offset
+        });
+
+        sendJson(res, 200, {
+          success: true,
+          count: orders.length,
+          orders
+        });
+      } catch (err) {
+        sendJson(res, 500, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/solana/latest-blockhash' && req.method === 'GET') {
+      try {
+        const { result } = await querySolanaRpcWithFailover('getLatestBlockhash', [{ commitment: 'confirmed' }]);
+        const blockhash = result?.value?.blockhash || result?.blockhash;
+        const lastValidBlockHeight = result?.value?.lastValidBlockHeight || result?.lastValidBlockHeight || 0;
+        if (!blockhash) {
+          throw new Error('Unable to fetch latest blockhash from Solana RPC');
+        }
+        sendJson(res, 200, {
+          success: true,
+          blockhash,
+          lastValidBlockHeight
+        });
+      } catch (err) {
+        sendJson(res, 502, { success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/quote' && req.method === 'GET') {
+      try {
+        const credits = Number(url.searchParams.get('credits') || 1000);
+        const sol = parseFloat(url.searchParams.get('sol') || 0.01);
+        const quote = await p2pMarketEngine.getQuote({ creditsAmount: credits, priceSol: sol });
+        sendJson(res, 200, {
+          success: true,
+          ...quote
+        });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/stats' && req.method === 'GET') {
+      try {
+        const stats = p2pMarketEngine.getStats();
+        const market = await fetchLiveMarketData();
+        const solPriceUsd = await fetchLiveSolPriceUsd();
+        sendJson(res, 200, {
+          success: true,
+          stats: {
+            ...stats,
+            solPriceUsd,
+            tokenPriceUsd: market?.priceUsd || 0,
+            marketCapUsd: market?.marketCap || 0
+          }
+        });
+      } catch (err) {
+        sendJson(res, 500, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/orders/create' && req.method === 'POST') {
+      try {
+        if (checkServerlessFinancialGuard(res)) return;
+        const body = await parseJsonBody(req);
+        const session = parseSession(req, body);
+        let sellerWallet = (session?.a || '').trim();
+        if (!sellerWallet && process.env.NODE_ENV === 'test' && body.sellerWallet) {
+          sellerWallet = (body.sellerWallet || '').trim();
+        }
+
+        if (!sellerWallet) {
+          sendJson(res, 401, { error: 'Wallet session authentication required to list credits.' });
+          return;
+        }
+
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
+        if (!checkRateLimit(`p2p_create_${sellerWallet}`, 20) || !checkRateLimit(`p2p_create_ip_${clientIp}`, 40)) {
+          sendJson(res, 429, { error: 'Rate limit exceeded for order creation. Please wait a moment.' });
+          return;
+        }
+
+        const result = await p2pMarketEngine.createListing({
+          sellerWallet,
+          creditsAmount: body.creditsAmount || body.credits,
+          priceSol: body.priceSol || body.sol,
+          metadata: body.metadata || {}
+        });
+
+        sendJson(res, 201, {
+          success: true,
+          order: result.order,
+          quote: result.quote
+        });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/orders/cancel' && req.method === 'POST') {
+      try {
+        if (checkServerlessFinancialGuard(res)) return;
+        const body = await parseJsonBody(req);
+        const session = parseSession(req, body);
+        let callerWallet = (session?.a || '').trim();
+        if (!callerWallet && process.env.NODE_ENV === 'test' && (body.callerWallet || body.wallet)) {
+          callerWallet = (body.callerWallet || body.wallet || '').trim();
+        }
+
+        if (!callerWallet) {
+          sendJson(res, 401, { error: 'Wallet session authentication required to cancel order.' });
+          return;
+        }
+
+        const orderId = (body.orderId || '').trim();
+        if (!orderId) {
+          sendJson(res, 400, { error: 'orderId is required.' });
+          return;
+        }
+
+        const cancelledOrder = await p2pMarketEngine.cancelListing({
+          orderId,
+          callerWallet
+        });
+
+        sendJson(res, 200, {
+          success: true,
+          order: cancelledOrder,
+          message: 'Order cancelled and escrowed credits refunded successfully.'
+        });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/orders/fulfill' && req.method === 'POST') {
+      try {
+        if (checkServerlessFinancialGuard(res)) return;
+        const body = await parseJsonBody(req);
+        const session = parseSession(req, body);
+        let buyerWallet = (session?.a || '').trim();
+        if (!buyerWallet && (body.buyerWallet || body.wallet)) {
+          buyerWallet = (body.buyerWallet || body.wallet || '').trim();
+        }
+
+        if (!buyerWallet) {
+          sendJson(res, 400, { error: 'Buyer wallet or authenticated session is required to fulfill order.' });
+          return;
+        }
+
+        const orderId = (body.orderId || '').trim();
+        const txSignature = (body.txSignature || body.signature || '').trim();
+
+        if (!orderId) {
+          sendJson(res, 400, { error: 'orderId is required.' });
+          return;
+        }
+        if (!txSignature) {
+          sendJson(res, 400, { error: 'txSignature is required to verify on-chain settlement and token burn.' });
+          return;
+        }
+
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
+        if (!checkRateLimit(`p2p_fill_${buyerWallet}`, 15) || !checkRateLimit(`p2p_fill_ip_${clientIp}`, 30)) {
+          sendJson(res, 429, { error: 'Rate limit exceeded for order fulfillment. Please wait a moment.' });
+          return;
+        }
+
+        const fulfillment = await p2pMarketEngine.fulfillOrder({
+          orderId,
+          buyerWallet,
+          txSignature
+        });
+
+        sendJson(res, 200, fulfillment);
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/orders/lock' && req.method === 'POST') {
+      try {
+        if (checkServerlessFinancialGuard(res)) return;
+        const body = await parseJsonBody(req);
+        const session = parseSession(req, body);
+        let buyerWallet = (session?.a || '').trim();
+        if (!buyerWallet && (body.buyerWallet || body.wallet)) {
+          buyerWallet = (body.buyerWallet || body.wallet || '').trim();
+        }
+
+        if (!buyerWallet) {
+          sendJson(res, 400, { error: 'Buyer wallet or authenticated session is required to lock order.' });
+          return;
+        }
+
+        const orderId = (body.orderId || '').trim();
+        if (!orderId) {
+          sendJson(res, 400, { error: 'orderId is required.' });
+          return;
+        }
+
+        const lockedOrder = await p2pMarketEngine.lockOrder({
+          orderId,
+          buyerWallet
+        });
+
+        sendJson(res, 200, {
+          success: true,
+          order: lockedOrder,
+          message: 'Order locked for purchase.'
+        });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/p2p/orders/retry-payout' && req.method === 'POST') {
+      try {
+        if (checkServerlessFinancialGuard(res)) return;
+        const body = await parseJsonBody(req);
+        const session = parseSession(req, body);
+        let callerWallet = (session?.a || '').trim();
+        if (!callerWallet && (body.callerWallet || body.wallet)) {
+          callerWallet = (body.callerWallet || body.wallet || '').trim();
+        }
+
+        if (!callerWallet) {
+          sendJson(res, 401, { error: 'Caller wallet authentication required.' });
+          return;
+        }
+
+        const orderId = (body.orderId || '').trim();
+        if (!orderId) {
+          sendJson(res, 400, { error: 'orderId is required.' });
+          return;
+        }
+
+        const result = await p2pMarketEngine.retrySolPayout({
+          orderId,
+          callerWallet
+        });
+
+        sendJson(res, 200, result);
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+      return;
+    }
+
     // Unknown API endpoints must return 404 JSON, never SPA index.html
     if (url.pathname.startsWith('/api/')) {
       sendJson(res, 404, { error: `Endpoint not found: ${req.method} ${url.pathname}` });
@@ -2741,6 +3029,15 @@ if (process.env.NODE_ENV !== 'test') {
 
   process.once('SIGTERM', gracefulShutdown);
   process.once('SIGINT', gracefulShutdown);
+
+  process.on('uncaughtException', (err) => {
+    console.error('[Process] Uncaught exception caught:', err?.message || err);
+    if (err?.stack) console.error(err.stack);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    console.warn('[Process] Unhandled promise rejection:', reason?.message || reason);
+  });
 }
 
 export default handleRequest;

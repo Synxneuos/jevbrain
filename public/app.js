@@ -583,7 +583,7 @@ async function connectSolanaWallet() {
     }
 
     // Instant VIP Authority Check: Zero restrictions, no signatures, instant unlock
-    if (pubkey === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || pubkey === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx') {
+    if (pubkey === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn') {
       const vipKey = `jev_live_vip_${pubkey}`;
       sessionStorage.setItem(STORAGE_SESSION_TOKEN, vipKey);
       localStorage.setItem(STORAGE_SESSION_TOKEN, vipKey);
@@ -1852,6 +1852,14 @@ async function openRewardsModal() {
   await loadRewardsLedgerHistory();
 }
 
+async function openRewardsModalWithTab(tabName = 'transfer') {
+  if (!elements.rewardsModal) return;
+  elements.rewardsModal.style.display = 'flex';
+  switchRewardsTab(tabName);
+  await loadRewardsHubData();
+  await loadRewardsLedgerHistory();
+}
+
 function switchRewardsTab(tabName) {
   const tabs = elements.rewardsTabs?.querySelectorAll('.tier-tab-btn') || [];
   tabs.forEach(btn => {
@@ -1867,7 +1875,11 @@ function switchRewardsTab(tabName) {
     if (pane) pane.style.display = (name === tabName) ? 'block' : 'none';
   });
 
-  if (tabName === 'history') {
+  if (tabName === 'transfer') {
+    switchP2PSubTab('buy');
+    updateP2PModalAvailDisplay();
+    loadP2PMarketOrders();
+  } else if (tabName === 'history') {
     loadRewardsLedgerHistory();
   } else if (tabName === 'boost') {
     loadBoostStatus();
@@ -1927,11 +1939,12 @@ async function loadRewardsHubData() {
       const tierLabel = eligData.tier || eligData.tierName || 'Free';
       const tierNum = eligData.tierLevel !== undefined ? eligData.tierLevel : (eligData.tier || 0);
       const hourlyRate = eligData.creditRatePerHour !== undefined ? eligData.creditRatePerHour : (eligData.accrualRatePerHour || 0);
+      const per15mRate = eligData.creditRatePer15Min !== undefined ? eligData.creditRatePer15Min : Math.round(Number(hourlyRate || 0) / 4);
 
       if (tokenDisplay) tokenDisplay.textContent = `${Number(tokens).toLocaleString()} $JEVBRAIN`;
       if (tierDisplay) tierDisplay.textContent = `${tierLabel} (Tier ${tierNum})`;
       if (modalTag) modalTag.textContent = tierLabel;
-      if (rateDisplay) rateDisplay.innerHTML = `${hourlyRate} <span style="font-size:10px;font-weight:normal;color:var(--text-tertiary);">/hr</span>`;
+      if (rateDisplay) rateDisplay.innerHTML = `${per15mRate} <span style="font-size:10px;font-weight:normal;color:var(--text-tertiary);">/ 15m (${hourlyRate}/hr)</span>`;
     }
 
     // 2. Fetch Credit Account Balance
@@ -1944,6 +1957,7 @@ async function loadRewardsHubData() {
       if (earnedDisplay) earnedDisplay.textContent = Number(balData.earnedCredits || 0).toLocaleString();
       const usedTotal = (Number(balData.usedCredits || 0) + Number(balData.redeemedCredits || 0) + Number(balData.transferredCredits || 0));
       if (usedDisplay) usedDisplay.textContent = usedTotal.toLocaleString();
+      updateP2PModalAvailDisplay();
 
       const burnMaxHint = document.getElementById('burn-max-hint');
       const burnSlider = document.getElementById('burn-credit-slider');
@@ -2014,7 +2028,8 @@ async function loadRewardsHubData() {
         const baseRate = Number(eligData?.creditRatePerHour || 0);
         if (baseRate > 0) {
           const boostedRate = Math.round(baseRate * Number(boost.multiplier));
-          rateDisplay.innerHTML = `${boostedRate} <span style="font-size:10px;font-weight:normal;color:#10b981;">/hr (⚡ ${boost.multiplier}x Boost)</span>`;
+          const boosted15m = Math.round(boostedRate / 4);
+          rateDisplay.innerHTML = `${boosted15m} <span style="font-size:10px;font-weight:normal;color:#10b981;">/ 15m (${boostedRate}/hr · ⚡ ${boost.multiplier}x)</span>`;
         }
       }
 
@@ -2051,7 +2066,12 @@ async function triggerCreditAccrual() {
     if (!res.ok) throw new Error(data.error || 'Failed to accrue credits');
 
     if (actionStatus) {
-      actionStatus.innerHTML = `<span style="color:#10b981;font-weight:600;">⚡ Accrued +${data.accruedAmount || 0} credits! (Available: ${data.availableCredits})</span>`;
+      const gained = Number(data.accruedAmount || 0);
+      // Surface the server's accrual reason (e.g. verification outage / interval pending)
+      // instead of a misleading green "+0 credits!" when nothing accrued.
+      actionStatus.innerHTML = gained > 0
+        ? `<span style="color:#10b981;font-weight:600;">⚡ Accrued +${gained} credits! (Available: ${data.availableCredits})</span>`
+        : `<span style="color:#f59e0b;font-weight:600;">⏳ ${escapeHtml(data.reason || 'No new credits yet — next accrual window is still pending.')}</span>`;
     }
     await loadRewardsHubData();
     await loadRewardsLedgerHistory();
@@ -2096,6 +2116,400 @@ async function submitCreditTransfer() {
     await loadRewardsLedgerHistory();
   } catch (err) {
     if (statusMsg) statusMsg.innerHTML = `<span style="color:#ef4444;">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+// ============================================
+// P2P COMPUTE MARKET CLIENT ENGINE (MODAL)
+// ============================================
+let p2pModalOrdersCache = [];
+
+function switchP2PSubTab(subTab = 'buy') {
+  const btnBuy = document.getElementById('p2p-subtab-buy');
+  const btnSell = document.getElementById('p2p-subtab-sell');
+  const btnTransfer = document.getElementById('p2p-subtab-transfer');
+  const viewBuy = document.getElementById('p2p-subview-buy');
+  const viewSell = document.getElementById('p2p-subview-sell');
+  const viewTransfer = document.getElementById('p2p-subview-transfer');
+
+  const resetBtn = (btn) => {
+    if (!btn) return;
+    btn.style.background = 'transparent';
+    btn.style.borderColor = 'var(--border-subtle)';
+    btn.style.color = 'var(--text-secondary)';
+    btn.style.fontWeight = '600';
+  };
+
+  [btnBuy, btnSell, btnTransfer].forEach(resetBtn);
+  if (viewBuy) viewBuy.style.display = 'none';
+  if (viewSell) viewSell.style.display = 'none';
+  if (viewTransfer) viewTransfer.style.display = 'none';
+
+  if (subTab === 'buy') {
+    if (btnBuy) {
+      btnBuy.style.background = 'rgba(249,115,22,0.15)';
+      btnBuy.style.borderColor = '#f97316';
+      btnBuy.style.color = '#f97316';
+      btnBuy.style.fontWeight = '700';
+    }
+    if (viewBuy) viewBuy.style.display = 'block';
+    loadP2PMarketOrders();
+  } else if (subTab === 'sell') {
+    if (btnSell) {
+      btnSell.style.background = 'rgba(249,115,22,0.15)';
+      btnSell.style.borderColor = '#f97316';
+      btnSell.style.color = '#f97316';
+      btnSell.style.fontWeight = '700';
+    }
+    if (viewSell) viewSell.style.display = 'block';
+    updateP2PModalAvailDisplay();
+    updateP2PModalSellPreview();
+  } else if (subTab === 'transfer') {
+    if (btnTransfer) {
+      btnTransfer.style.background = 'rgba(56,189,248,0.15)';
+      btnTransfer.style.borderColor = '#38bdf8';
+      btnTransfer.style.color = '#38bdf8';
+      btnTransfer.style.fontWeight = '700';
+    }
+    if (viewTransfer) viewTransfer.style.display = 'block';
+  }
+}
+
+function updateP2PModalAvailDisplay() {
+  const availEl = document.getElementById('p2p-modal-avail-credits');
+  const hubAvail = document.getElementById('hub-avail-credits');
+  const previewSeller = document.getElementById('p2p-modal-preview-seller');
+
+  if (availEl) {
+    const rawVal = hubAvail ? hubAvail.textContent.replace(/,/g, '') : '0';
+    const num = parseInt(rawVal, 10) || 0;
+    availEl.textContent = `${num.toLocaleString()} Credits`;
+  }
+  if (previewSeller) {
+    previewSeller.textContent = currentWallet
+      ? `${currentWallet.slice(0, 4)}...${currentWallet.slice(-4)}`
+      : 'Connect Wallet';
+    previewSeller.style.color = currentWallet ? '#10b981' : '#f59e0b';
+  }
+}
+
+function setP2PModalSellCredits(amt) {
+  const input = document.getElementById('p2p-modal-sell-credits');
+  if (!input) return;
+  if (amt === 'max') {
+    const hubAvail = document.getElementById('hub-avail-credits');
+    const rawVal = hubAvail ? hubAvail.textContent.replace(/,/g, '') : '0';
+    input.value = Math.max(100, parseInt(rawVal, 10) || 0);
+  } else {
+    input.value = amt;
+  }
+  updateP2PModalSellPreview();
+}
+
+function updateP2PModalSellPreview() {
+  const creditsInput = document.getElementById('p2p-modal-sell-credits');
+  const solInput = document.getElementById('p2p-modal-sell-sol');
+  const ratePreview = document.getElementById('p2p-modal-preview-rate');
+  const sellerPreview = document.getElementById('p2p-modal-preview-seller');
+
+  const credits = parseFloat(creditsInput?.value || '0');
+  const sol = parseFloat(solInput?.value || '0');
+
+  if (ratePreview) {
+    if (credits > 0 && sol > 0) {
+      const ratePer1k = (sol / credits) * 1000;
+      ratePreview.textContent = `${ratePer1k.toFixed(4)} SOL / 1k`;
+    } else {
+      ratePreview.textContent = '0.0000 SOL / 1k';
+    }
+  }
+
+  if (sellerPreview) {
+    sellerPreview.textContent = currentWallet
+      ? `${currentWallet.slice(0, 4)}...${currentWallet.slice(-4)}`
+      : 'Connect Wallet';
+    sellerPreview.style.color = currentWallet ? '#10b981' : '#f59e0b';
+  }
+}
+
+async function loadP2PMarketOrders() {
+  const container = document.getElementById('p2p-modal-orders-container');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--text-secondary);font-size:12px;">Syncing live P2P orderbook...</div>';
+
+  try {
+    const res = await fetch('/api/p2p/orders?status=ACTIVE');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch P2P orders');
+
+    p2pModalOrdersCache = Array.isArray(data.orders) ? data.orders : [];
+
+    if (p2pModalOrdersCache.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:32px 16px;background:var(--bg-subtle);border:1px dashed var(--border-subtle);border-radius:8px;">
+          <div style="font-size:24px;margin-bottom:8px;">🔥</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">No Active Listings Right Now</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">Be the first holder to list unused compute credits for instant SOL!</div>
+          <button class="btn-ghost-sm" onclick="switchP2PSubTab('sell')" style="color:#f97316;border-color:#f97316;font-weight:700;">➕ Create Listing Now</button>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = p2pModalOrdersCache.map(order => {
+      const isSeller = currentWallet && order.sellerWallet && currentWallet.toLowerCase() === order.sellerWallet.toLowerCase();
+      const creditsFormatted = Number(order.creditsAmount || 0).toLocaleString();
+      const priceSol = Number(order.priceSol || 0);
+      const ratePer1k = order.creditsAmount > 0 ? ((priceSol / order.creditsAmount) * 1000).toFixed(4) : '0.0000';
+      const sellerShort = order.sellerWallet ? `${order.sellerWallet.slice(0, 4)}...${order.sellerWallet.slice(-4)}` : 'Unknown';
+
+      return `
+        <div style="background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;transition:border-color 0.15s ease;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:baseline;gap:6px;">
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--text-primary);">${creditsFormatted}</span>
+              <span style="font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Credits</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-family:var(--font-mono);font-size:12.5px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);padding:2px 8px;border-radius:4px;">
+                ${priceSol} SOL
+              </span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--text-secondary);border-top:1px solid rgba(255,255,255,0.05);padding-top:6px;">
+            <div>
+              Rate: <strong style="font-family:var(--font-mono);color:#f97316;">${ratePer1k} SOL / 1k</strong>
+            </div>
+            <div>
+              Seller: <a href="https://solscan.io/account/${order.sellerWallet}" target="_blank" rel="noopener" style="font-family:var(--font-mono);color:var(--accent-cyan);text-decoration:none;">${sellerShort} ↗</a>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:6px;margin-top:2px;">
+            ${isSeller ? `
+              <span style="font-size:10.5px;color:var(--accent-cyan);display:flex;align-items:center;font-weight:600;">Your Listing (Escrowed)</span>
+              <button class="btn-ghost-sm" onclick="cancelModalP2POrder('${order.orderId}')" style="margin-left:auto;color:#ef4444;border-color:rgba(239,68,68,0.3);padding:3px 8px;font-size:10.5px;">Cancel</button>
+            ` : `
+              <button class="btn-dark-primary" id="btn-buy-order-${order.orderId}" onclick="executeModalP2PBuy('${order.orderId}')" style="width:100%;background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:#fff;font-weight:700;padding:6px 12px;font-size:11.5px;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                <span>⚡</span>
+                <span>1-Click Buy (${priceSol} SOL)</span>
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('P2P orderbook error:', err);
+    container.innerHTML = `<div style="text-align:center;padding:24px 0;color:#ef4444;font-size:11.5px;">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function submitP2PModalListing() {
+  const creditsInput = document.getElementById('p2p-modal-sell-credits');
+  const solInput = document.getElementById('p2p-modal-sell-sol');
+  const statusEl = document.getElementById('p2p-modal-sell-status');
+  const submitBtn = document.getElementById('btn-p2p-modal-submit-listing');
+
+  if (!currentWallet) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Please connect your Solana wallet first.</span>';
+    return;
+  }
+
+  const credits = parseInt(creditsInput?.value, 10);
+  const priceSol = parseFloat(solInput?.value);
+
+  if (!credits || credits < 100) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Minimum listing is 100 credits.</span>';
+    return;
+  }
+  if (!priceSol || priceSol < 0.001) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Minimum asking price is 0.001 SOL.</span>';
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Escrowing Credits & Creating Listing...';
+  }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-secondary);">Creating order on ledger...</span>';
+
+  try {
+    const res = await fetch('/api/p2p/orders/create', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        sellerWallet: currentWallet,
+        creditsAmount: credits,
+        priceSol: priceSol
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create listing');
+
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:#10b981;font-weight:700;">✓ Listing Created! ${credits.toLocaleString()} credits escrowed.</span>`;
+    }
+    await loadRewardsHubData();
+    await loadRewardsLedgerHistory();
+    setTimeout(() => {
+      switchP2PSubTab('buy');
+    }, 1200);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(err.message)}</span>`;
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '🔥 Create Listing &amp; Escrow Credits';
+    }
+  }
+}
+
+async function cancelModalP2POrder(orderId) {
+  if (!confirm('Are you sure you want to cancel this listing and release your escrowed credits?')) return;
+
+  try {
+    const res = await fetch('/api/p2p/orders/cancel', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        orderId,
+        sellerWallet: currentWallet
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to cancel order');
+
+    await loadRewardsHubData();
+    await loadRewardsLedgerHistory();
+    await loadP2PMarketOrders();
+  } catch (err) {
+    alert(`Cancellation error: ${err.message}`);
+  }
+}
+
+async function executeModalP2PBuy(orderId) {
+  const order = p2pModalOrdersCache.find(o => o.orderId === orderId);
+  if (!order) {
+    alert('Order details not found. Refreshing orderbook...');
+    loadP2PMarketOrders();
+    return;
+  }
+
+  const provider = window.solana || window.phantom?.solana;
+  if (!provider) {
+    alert('Phantom wallet extension is required for 1-click purchase.');
+    window.open('https://phantom.app', '_blank');
+    return;
+  }
+
+  if (!currentWallet) {
+    try {
+      const resp = await provider.connect();
+      currentWallet = resp.publicKey.toString();
+      await loadRewardsHubData();
+    } catch (e) {
+      alert('Wallet connection cancelled.');
+      return;
+    }
+  }
+
+  if (currentWallet.toLowerCase() === order.sellerWallet.toLowerCase()) {
+    alert('You cannot purchase your own order.');
+    return;
+  }
+
+  const buyBtn = document.getElementById(`btn-buy-order-${orderId}`);
+  if (buyBtn) {
+    buyBtn.disabled = true;
+    buyBtn.textContent = 'Building Solana transaction...';
+  }
+
+  try {
+    if (!window.solanaWeb3) {
+      throw new Error('Solana Web3 runtime not ready. Please refresh the page.');
+    }
+
+    const buyerPubkey = new window.solanaWeb3.PublicKey(currentWallet);
+    const sellerPubkey = new window.solanaWeb3.PublicKey(order.sellerWallet);
+    const tx = new window.solanaWeb3.Transaction();
+    tx.feePayer = buyerPubkey;
+
+    // Native SOL transfer directly to seller wallet
+    const lamports = BigInt(order.priceLamports);
+    tx.add(window.solanaWeb3.SystemProgram.transfer({
+      fromPubkey: buyerPubkey,
+      toPubkey: sellerPubkey,
+      lamports: lamports
+    }));
+
+    if (buyBtn) buyBtn.textContent = 'Fetching network blockhash...';
+    const bhRes = await fetch('/api/solana/latest-blockhash');
+    const bhData = await bhRes.json();
+    if (!bhData.success || !bhData.blockhash) {
+      throw new Error('Unable to retrieve recent blockhash from Solana RPC');
+    }
+    tx.recentBlockhash = bhData.blockhash;
+
+    if (buyBtn) buyBtn.textContent = 'Approve in Phantom...';
+    const sendResult = await provider.signAndSendTransaction(tx);
+    let txSig = typeof sendResult === 'string' ? sendResult : (sendResult?.signature || sendResult);
+    if (txSig instanceof Uint8Array || Array.isArray(txSig)) {
+      txSig = new window.solanaWeb3.PublicKey(txSig).toBase58();
+    }
+
+    if (!txSig) throw new Error('Transaction was signed but signature was not returned by Phantom.');
+
+    if (buyBtn) buyBtn.textContent = 'Verifying on-chain settlement...';
+
+    // Poll fulfillment endpoint
+    let fulfilled = false;
+    let lastErr = '';
+    for (let attempt = 1; attempt <= 7; attempt++) {
+      try {
+        if (buyBtn) buyBtn.textContent = `Verifying on-chain (${attempt}/7)...`;
+        await new Promise(r => setTimeout(r, 3500));
+
+        const fRes = await fetch('/api/p2p/orders/fulfill', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            orderId: order.orderId,
+            buyerWallet: currentWallet,
+            txSignature: txSig
+          })
+        });
+
+        const fData = await fRes.json();
+        if (fRes.ok && fData.success) {
+          fulfilled = true;
+          alert(`🎉 Purchase Confirmed! ${order.creditsAmount.toLocaleString()} credits have been delivered to your balance.`);
+          await loadRewardsHubData();
+          await loadRewardsLedgerHistory();
+          await loadP2PMarketOrders();
+          break;
+        } else {
+          lastErr = fData.error || 'Pending on-chain confirmation...';
+        }
+      } catch (e) {
+        lastErr = e.message;
+      }
+    }
+
+    if (!fulfilled) {
+      alert(`Transaction broadcasted (${txSig.slice(0, 8)}...), but pending final confirmation: ${lastErr}. You can verify again in Burning Day terminal.`);
+    }
+  } catch (err) {
+    console.error('1-Click P2P Buy error:', err);
+    alert(`Purchase error: ${err.message}`);
+  } finally {
+    if (buyBtn) {
+      buyBtn.disabled = false;
+      buyBtn.innerHTML = `<span>⚡</span><span>1-Click Buy (${order.priceSol} SOL)</span>`;
+    }
   }
 }
 
@@ -2592,7 +3006,8 @@ async function loadBoostStatus() {
       if (userTierEl) userTierEl.textContent = `${data.requirement.tierName} (Tier ${data.requirement.tierLevel})`;
       if (reqEl) reqEl.textContent = `${Number(data.requirement.requiredTokensUi).toLocaleString()} $JEVBRAIN`;
       if (projEl) {
-        projEl.textContent = `${Number(data.requirement.boostedCreditsPerDay).toLocaleString()} credits / day (${data.requirement.boostedRatePerHour}/hr)`;
+        const per15m = data.requirement.boostedRatePer15Min || Math.round((data.requirement.boostedRatePerHour || 0) / 4);
+        projEl.textContent = `${per15m.toLocaleString()} / 15m (${Number(data.requirement.boostedRatePerHour).toLocaleString()}/hr · ${Number(data.requirement.boostedCreditsPerDay).toLocaleString()}/day)`;
       }
     } else {
       if (userTierEl) userTierEl.textContent = 'Tier 0 (Holdings Required)';
@@ -3359,6 +3774,12 @@ function bindEvents() {
   const walletModalVip = document.getElementById('rainbow-modal-vip-btn');
   const walletModalDisc = document.getElementById('rainbow-modal-disconnect-btn');
 
+  const topbarBuyBtn = document.getElementById('topbar-buy-credits-btn');
+  topbarBuyBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openRewardsModalWithTab('transfer');
+  });
+
   topbarWalletBtn?.addEventListener('click', () => {
     if (walletModal) walletModal.style.display = 'flex';
   });
@@ -3702,7 +4123,7 @@ async function init() {
   // Check persisted wallet, but never trust the locally cached tier blindly:
   // the saved session token must validate against the server first.
   const savedWallet = localStorage.getItem(STORAGE_WALLET_KEY) || localStorage.getItem('jev_wallet_address');
-  if (savedWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn' || savedWallet === '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx') {
+  if (savedWallet === 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn') {
     const vipKey = `jev_live_vip_${savedWallet}`;
     sessionStorage.setItem(STORAGE_SESSION_TOKEN, vipKey);
     localStorage.setItem(STORAGE_SESSION_TOKEN, vipKey);
@@ -3755,3 +4176,17 @@ async function init() {
 
 // Start
 init();
+
+// Expose global window hooks for inline onclick handlers
+window.switchRewardsTab = switchRewardsTab;
+window.openRewardsModal = openRewardsModal;
+window.openRewardsModalWithTab = openRewardsModalWithTab;
+window.switchP2PSubTab = switchP2PSubTab;
+window.updateP2PModalAvailDisplay = updateP2PModalAvailDisplay;
+window.setP2PModalSellCredits = setP2PModalSellCredits;
+window.updateP2PModalSellPreview = updateP2PModalSellPreview;
+window.loadP2PMarketOrders = loadP2PMarketOrders;
+window.submitP2PModalListing = submitP2PModalListing;
+window.cancelModalP2POrder = cancelModalP2POrder;
+window.executeModalP2PBuy = executeModalP2PBuy;
+

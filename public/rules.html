@@ -250,6 +250,36 @@
       border-radius: 6px;
       text-decoration: none;
     }
+
+    @media (max-width: 768px) {
+      .rules-nav {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .rules-nav > div {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+      .rules-main {
+        margin: 20px auto;
+        padding: 0 14px 60px;
+      }
+      .rules-title {
+        font-size: 22px;
+      }
+      .section-card {
+        padding: 18px 14px;
+      }
+      .role-grid {
+        grid-template-columns: 1fr;
+      }
+      .tier-table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
   </style>
 </head>
 <body class="rules-page-layout">
@@ -268,7 +298,8 @@
       <span style="font-weight:600; font-size:14px; letter-spacing:-0.01em;">Jev Brain</span>
       <span style="font-size:11px; color:#71717a; font-family:monospace;">/ SECURITY & RULES</span>
     </a>
-    <div style="display:flex; gap:12px;">
+    <div style="display:flex; gap:12px; align-items:center;">
+      <a href="/burning-day.html" class="secondary-btn" style="color:#f97316;border-color:rgba(249,115,22,0.4);font-weight:600;" title="Burning Day · P2P Compute & Burn Market">🔥 Burning Day (P2P)</a>
       <a href="/verify.html" class="primary-btn">Verify Token Holding →</a>
       <a href="/" class="secondary-btn">← Back to Workspace</a>
     </div>
@@ -395,40 +426,40 @@
         <thead>
           <tr>
             <th>Tier Role</th>
-            <th>Color Tag</th>
             <th>Required Holding</th>
+            <th>15-Min / Hourly Yield (4x)</th>
             <th>AI Model Access</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td style="font-weight:600; color:#fbbf24;">Dynasty Magnate</td>
-            <td>Amber Gold</td>
-            <td>Top 1% / 5M+ $JEVBRAIN</td>
-            <td>All 510+ Frontier & Flagship Models Uncapped</td>
+            <td>1,000,000+ $JEV</td>
+            <td style="color:#10b981;font-weight:600;">2,500 / 15m (10,000/hr)</td>
+            <td>All 510+ Frontier &amp; Flagship Models Uncapped</td>
           </tr>
           <tr>
             <td style="font-weight:600; color:#34d399;">Syndicate Director</td>
-            <td>Emerald</td>
-            <td>2.5M - 5M $JEVBRAIN</td>
+            <td>100,000+ $JEV</td>
+            <td style="color:#10b981;font-weight:600;">750 / 15m (3,000/hr)</td>
             <td>Claude 3.5 Sonnet, GPT-4o, DeepSeek-V3 High Quota</td>
           </tr>
           <tr>
             <td style="font-weight:600; color:#818cf8;">Principal Partner</td>
-            <td>Indigo</td>
-            <td>1M - 2.5M $JEVBRAIN</td>
+            <td>10,000+ $JEV</td>
+            <td style="color:#10b981;font-weight:600;">200 / 15m (800/hr)</td>
             <td>Llama 3.3 70B, Qwen 2.5 72B, DeepSeek Coder</td>
           </tr>
           <tr>
             <td style="font-weight:600; color:#94a3b8;">Charter Associate</td>
-            <td>Slate</td>
-            <td>250k - 1M $JEVBRAIN</td>
-            <td>Flash & Fast Models (Gemini 2.0 Flash, GPT-4o-mini)</td>
+            <td>1,000+ $JEV</td>
+            <td style="color:#10b981;font-weight:600;">50 / 15m (200/hr)</td>
+            <td>Flash &amp; Fast Models (Gemini 2.0 Flash, GPT-4o-mini)</td>
           </tr>
           <tr>
             <td style="font-weight:600; color:#a1a1aa;">Reserve Initiate</td>
-            <td>Zinc</td>
-            <td>1 - 250k $JEVBRAIN</td>
+            <td>1+ $JEV</td>
+            <td style="color:#10b981;font-weight:600;">10 / 15m (40/hr)</td>
             <td>Base Models + Community Holder Access</td>
           </tr>
         </tbody>

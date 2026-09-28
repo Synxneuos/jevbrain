@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="app-html">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,8 +24,11 @@
       }
     })();
   </script>
+
+  <!-- Official Solana Web3 Runtime for 1-Click P2P Settlement -->
+  <script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
 </head>
-<body>
+<body class="app-body">
   <div class="app-layout">
     <!-- Mobile Drawer Backdrop -->
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
@@ -141,6 +144,13 @@
             <span>API Keys</span>
             <span class="nav-status-pill" style="background:rgba(234,179,8,0.15); color:#eab308;">REST</span>
           </a>
+          <a href="/burning-day.html" class="nav-link" id="nav-burning-day" title="Burning Day · P2P Credit & Burn Market">
+            <svg class="nav-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:#f97316;">
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3.5z"></path>
+            </svg>
+            <span>Burning Day</span>
+            <span class="nav-status-pill" style="background:rgba(249,115,22,0.18); color:#f97316; font-weight:700;">🔥 P2P</span>
+          </a>
           <a href="/how-it-works.html" class="nav-link" id="nav-how-it-works" title="Architecture & Flow Guide">
             <svg class="nav-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
@@ -156,6 +166,15 @@
             </svg>
             <span>Roadmap</span>
             <span class="nav-status-pill" style="background:rgba(168,85,247,0.15); color:#a855f7;">2026</span>
+          </a>
+          <a href="/cinematic" class="nav-link" id="nav-cinematic" title="JEVBRAIN 3D Cinematic Experience" target="_blank" style="color:var(--accent-cyan); font-weight:600;">
+            <svg class="nav-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            <span>Cinematic 3D</span>
+            <span class="nav-status-pill" style="background:rgba(56,189,248,0.15); color:#38bdf8; font-weight:700;">60FPS</span>
           </a>
           <a href="/teaser.html" class="nav-link" id="nav-teaser" title="Official 1080p 3D Cinematic Teaser" target="_blank">
             <svg class="nav-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -326,6 +345,18 @@
             <span class="tier-disconnect-x" id="disconnect-btn" title="Disconnect Session">&times;</span>
           </div>
 
+          <!-- Topbar Quick Buy Credits / P2P Button -->
+          <button class="btn-ghost-sm" id="topbar-buy-credits-btn" style="color:#10b981;border-color:rgba(16,185,129,0.4);font-weight:700;padding:5px 12px;font-size:12px;border-radius:6px;cursor:pointer;background:rgba(16,185,129,0.08);display:flex;align-items:center;gap:5px;" title="Open P2P Compute Market to buy or sell credits">
+            <span>⚡</span>
+            <span>Buy / Sell Credits</span>
+          </button>
+
+          <!-- Topbar Burning Day P2P Market Action -->
+          <a href="/burning-day.html" class="topbar-p2p-btn" title="Burning Day · P2P Compute & Token Burn Market">
+            <span>🔥</span>
+            <span class="p2p-nav-text">Burning Day (P2P)</span>
+          </a>
+
           <!-- Topbar Wallet Connect Button -->
           <button class="wallet-topbar-btn" id="topbar-connect-wallet-btn">
             <span class="status-indicator-dot"></span>
@@ -367,8 +398,9 @@
       <!-- Center Scrolling Workspace -->
       <div class="workspace-scroll-pane" id="claude-center">
         <!-- Zero-Message Minimal Introduction -->
-        <div class="workspace-hero" id="claude-hero">
-          <div class="hero-brand-block">
+        <div class="workspace-hero" id="claude-hero" style="position:relative;">
+          <div id="hero-3d-bg" style="position:absolute; inset:0; pointer-events:none; z-index:0; opacity:0.65; overflow:hidden;"></div>
+          <div class="hero-brand-block" style="position:relative; z-index:1;">
             <div class="hero-brand-symbol">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -386,7 +418,29 @@
             <p class="hero-description">
               Intelligent multi-model routing, autonomous agent safety, and verified token-holder workspace.
             </p>
+            <div style="margin-top:14px; display:flex; justify-content:center;">
+              <a href="/cinematic" target="_blank" style="display:inline-flex; align-items:center; gap:8px; padding:6px 14px; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:9999px; color:#F4F4F5; font-family:'JetBrains Mono', monospace; font-size:12px; text-decoration:none; transition:all 0.2s;">
+                <span style="width:7px; height:7px; border-radius:50%; background:#38BDF8; box-shadow:0 0 10px #38BDF8;"></span>
+                <span>INTELLIGENT COMPUTATION, REIMAGINED</span>
+                <span style="background:rgba(56,189,248,0.2); color:#38BDF8; padding:2px 7px; border-radius:4px; font-weight:700; font-size:10px;">ENTER 3D ↗</span>
+              </a>
+            </div>
           </div>
+
+          <!-- Burning Day P2P Market Global Action Banner -->
+          <a href="/burning-day.html" class="hero-p2p-banner" title="Open Burning Day P2P Market">
+            <div class="hero-p2p-left">
+              <div class="hero-p2p-flame-icon">🔥</div>
+              <div>
+                <div class="hero-p2p-title">Burning Day · P2P Compute Credit Trading is Live</div>
+                <div class="hero-p2p-desc">List idle credits for SOL or buy AI compute with on-chain $JEVBRAIN token burns.</div>
+              </div>
+            </div>
+            <div class="hero-p2p-badge">
+              <span>Trade Compute</span>
+              <span class="hero-p2p-arrow">→</span>
+            </div>
+          </a>
 
           <!-- 4 Real Starter Action Cards -->
           <div class="starter-grid">
@@ -945,7 +999,7 @@
         <!-- Navigation Tabs -->
         <div class="router-tier-tabs" id="rewards-tabs" style="margin-bottom:12px;">
           <button class="tier-tab-btn active" data-tab="overview">Overview &amp; Credits</button>
-          <button class="tier-tab-btn" data-tab="transfer">P2P Transfer</button>
+          <button class="tier-tab-btn" data-tab="transfer" style="color:#f97316;font-weight:700;">🔥 P2P Market (Buy &amp; Sell)</button>
           <button class="tier-tab-btn" data-tab="redeem">Burn Credits for SOL (Reward Pool)</button>
           <button class="tier-tab-btn" data-tab="boost">⚡ Burn-to-Boost (2x)</button>
           <button class="tier-tab-btn" data-tab="history">Ledger History</button>
@@ -1011,25 +1065,101 @@
           <div id="hub-action-status" style="font-size:11px;margin-top:6px;color:var(--text-secondary);text-align:center;"></div>
         </div>
 
-        <!-- TAB 2: P2P TRANSFER -->
+        <!-- TAB 2: P2P COMPUTE MARKET (BUY & SELL) -->
         <div class="rewards-tab-pane" id="pane-rewards-transfer" style="display:none;">
-          <p style="font-size:11.5px;color:var(--text-secondary);margin-bottom:12px;">
-            Transfer credits directly to any Solana wallet address. Debited instantly from your available balance.
-          </p>
-          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
-            <div>
-              <label style="display:block;font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:3px;font-weight:600;">Recipient Solana Address (Base58)</label>
-              <input type="text" id="transfer-to-address" class="clean-search-input" placeholder="e.g. 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" style="font-family:var(--font-mono);font-size:11.5px;width:100%;" />
+          <!-- P2P Sub-Navigation Bar -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;border-bottom:1px solid var(--border-subtle);padding-bottom:10px;">
+            <div style="display:flex;gap:6px;">
+              <button class="btn-ghost-sm" id="p2p-subtab-buy" onclick="switchP2PSubTab('buy')" style="background:rgba(249,115,22,0.15);border-color:#f97316;color:#f97316;font-weight:700;">
+                ⚡ Buy Compute (Orderbook)
+              </button>
+              <button class="btn-ghost-sm" id="p2p-subtab-sell" onclick="switchP2PSubTab('sell')" style="font-weight:600;">
+                ➕ Sell / List Credits
+              </button>
+              <button class="btn-ghost-sm" id="p2p-subtab-transfer" onclick="switchP2PSubTab('transfer')" style="font-weight:600;">
+                📦 Direct Transfer
+              </button>
             </div>
-            <div>
-              <label style="display:block;font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:3px;font-weight:600;">Credit Amount</label>
-              <input type="number" id="transfer-credit-amount" class="clean-search-input" placeholder="Enter integer credits (e.g. 100)" min="1" style="font-family:var(--font-mono);font-size:11.5px;width:100%;" />
+            <a href="/burning-day.html" target="_blank" class="btn-ghost-sm" style="color:#f97316;border-color:rgba(249,115,22,0.4);font-weight:600;text-decoration:none;padding:4px 8px;font-size:11px;">
+              Full Terminal ↗
+            </a>
+          </div>
+
+          <!-- SUB-VIEW 1: BUY COMPUTE (ACTIVE ORDERBOOK) -->
+          <div id="p2p-subview-buy">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-size:11px;color:var(--text-secondary);">Live Active Listings from Holders:</span>
+              <button class="btn-ghost-sm" onclick="loadP2PMarketOrders()" style="padding:2px 8px;font-size:10px;">↻ Refresh</button>
+            </div>
+            <div id="p2p-modal-orders-container" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px;">
+              <div style="text-align:center;padding:24px 0;color:var(--text-secondary);font-size:12px;">Loading live P2P listings...</div>
             </div>
           </div>
-          <button class="btn-dark-primary" id="btn-submit-transfer" style="width:100%;">
-            Confirm &amp; Transfer Credits
-          </button>
-          <div id="transfer-status-msg" style="font-size:11px;margin-top:8px;text-align:center;"></div>
+
+          <!-- SUB-VIEW 2: SELL / LIST CREDITS -->
+          <div id="p2p-subview-sell" style="display:none;">
+            <div style="background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:var(--text-secondary);">Your Available Balance:</span>
+              <span style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--accent-cyan);" id="p2p-modal-avail-credits">0 Credits</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                  <label style="font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Credits to List</label>
+                  <div style="display:flex;gap:4px;">
+                    <button class="btn-ghost-sm" onclick="setP2PModalSellCredits(1000)" style="padding:1px 6px;font-size:10px;">1k</button>
+                    <button class="btn-ghost-sm" onclick="setP2PModalSellCredits(2500)" style="padding:1px 6px;font-size:10px;">2.5k</button>
+                    <button class="btn-ghost-sm" onclick="setP2PModalSellCredits(5000)" style="padding:1px 6px;font-size:10px;">5k</button>
+                    <button class="btn-ghost-sm" onclick="setP2PModalSellCredits('max')" style="padding:1px 6px;font-size:10px;">Max</button>
+                  </div>
+                </div>
+                <input type="number" id="p2p-modal-sell-credits" class="clean-search-input" value="2500" min="100" step="100" style="font-family:var(--font-mono);font-size:12px;width:100%;" oninput="updateP2PModalSellPreview()" />
+              </div>
+
+              <div>
+                <label style="display:block;font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:3px;font-weight:600;">Asking Price in SOL (Settled directly to your wallet)</label>
+                <input type="number" id="p2p-modal-sell-sol" class="clean-search-input" value="0.025" min="0.001" step="0.001" style="font-family:var(--font-mono);font-size:12px;width:100%;" oninput="updateP2PModalSellPreview()" />
+              </div>
+            </div>
+
+            <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="color:var(--text-secondary);">Effective Rate:</span>
+                <span style="font-family:var(--font-mono);font-weight:700;color:#f97316;" id="p2p-modal-preview-rate">0.0100 SOL / 1k</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--text-secondary);">Settlement Target:</span>
+                <span style="font-family:var(--font-mono);color:#10b981;" id="p2p-modal-preview-seller">Connect Wallet</span>
+              </div>
+            </div>
+
+            <button class="btn-dark-primary" id="btn-p2p-modal-submit-listing" onclick="submitP2PModalListing()" style="width:100%;background:linear-gradient(135deg, #f97316 0%, #ea580c 100%);color:#fff;font-weight:700;">
+              🔥 Create Listing &amp; Escrow Credits
+            </button>
+            <div id="p2p-modal-sell-status" style="font-size:11px;margin-top:8px;text-align:center;"></div>
+          </div>
+
+          <!-- SUB-VIEW 3: DIRECT TRANSFER -->
+          <div id="p2p-subview-transfer" style="display:none;">
+            <p style="font-size:11.5px;color:var(--text-secondary);margin-bottom:12px;">
+              Transfer credits directly to any Solana wallet address. Debited instantly from your available balance.
+            </p>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;">
+              <div>
+                <label style="display:block;font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:3px;font-weight:600;">Recipient Solana Address (Base58)</label>
+                <input type="text" id="transfer-to-address" class="clean-search-input" placeholder="e.g. 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" style="font-family:var(--font-mono);font-size:11.5px;width:100%;" />
+              </div>
+              <div>
+                <label style="display:block;font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:3px;font-weight:600;">Credit Amount</label>
+                <input type="number" id="transfer-credit-amount" class="clean-search-input" placeholder="Enter integer credits (e.g. 100)" min="1" style="font-family:var(--font-mono);font-size:11.5px;width:100%;" />
+              </div>
+            </div>
+            <button class="btn-dark-primary" id="btn-submit-transfer" style="width:100%;">
+              Confirm &amp; Transfer Credits
+            </button>
+            <div id="transfer-status-msg" style="font-size:11px;margin-top:8px;text-align:center;"></div>
+          </div>
         </div>
 
         <!-- TAB 3: BURN FOR SOL (DISTRIBUTABLE REWARD POOL WITH DYNAMIC MC SCALING) -->
@@ -1148,11 +1278,11 @@
                 </tr>
               </thead>
               <tbody id="boost-matrix-tbody">
-                <tr><td>Reserve Initiate</td><td>1</td><td><strong>100</strong></td><td>10 / hr</td><td style="color:#10b981;font-weight:600;">20 / hr (480/d)</td></tr>
-                <tr><td>Charter Associate</td><td>1,000</td><td><strong>250</strong></td><td>50 / hr</td><td style="color:#10b981;font-weight:600;">100 / hr (2,400/d)</td></tr>
-                <tr><td>Principal Partner</td><td>10,000</td><td><strong>2,000</strong></td><td>200 / hr</td><td style="color:#10b981;font-weight:600;">400 / hr (9,600/d)</td></tr>
-                <tr><td>Syndicate Director</td><td>100,000</td><td><strong>15,000</strong></td><td>750 / hr</td><td style="color:#10b981;font-weight:600;">1,500 / hr (36,000/d)</td></tr>
-                <tr><td>Dynasty Magnate</td><td>1,000,000</td><td><strong>100,000</strong></td><td>2,500 / hr</td><td style="color:#10b981;font-weight:600;">5,000 / hr (120,000/d)</td></tr>
+                <tr><td>Reserve Initiate</td><td>1</td><td><strong>100</strong></td><td>10 / 15m (40/hr)</td><td style="color:#10b981;font-weight:600;">20 / 15m (80/hr · 1,920/d)</td></tr>
+                <tr><td>Charter Associate</td><td>1,000</td><td><strong>250</strong></td><td>50 / 15m (200/hr)</td><td style="color:#10b981;font-weight:600;">100 / 15m (400/hr · 9,600/d)</td></tr>
+                <tr><td>Principal Partner</td><td>10,000</td><td><strong>2,000</strong></td><td>200 / 15m (800/hr)</td><td style="color:#10b981;font-weight:600;">400 / 15m (1,600/hr · 38,400/d)</td></tr>
+                <tr><td>Syndicate Director</td><td>100,000</td><td><strong>15,000</strong></td><td>750 / 15m (3,000/hr)</td><td style="color:#10b981;font-weight:600;">1,500 / 15m (6,000/hr · 144,000/d)</td></tr>
+                <tr><td>Dynasty Magnate</td><td>1,000,000</td><td><strong>100,000</strong></td><td>2,500 / 15m (10,000/hr)</td><td style="color:#10b981;font-weight:600;">5,000 / 15m (20,000/hr · 480,000/d)</td></tr>
               </tbody>
             </table>
           </div>
@@ -1462,5 +1592,6 @@
   </div>
 
   <script src="/app.js"></script>
+  <script type="module" src="/hero-3d.js"></script>
 </body>
 </html>

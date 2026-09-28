@@ -83,37 +83,47 @@ test('Boost Engine Matrix: matches exact 5-tier specification (§2)', () => {
   const t1 = getBurnRequirementForTier(1);
   assert.strictEqual(t1.tierName, 'Reserve Initiate');
   assert.strictEqual(t1.requiredTokensUi, 100);
-  assert.strictEqual(t1.baseRatePerHour, 10);
-  assert.strictEqual(t1.boostedRatePerHour, 20);
-  assert.strictEqual(t1.boostedCreditsPerDay, 480);
+  assert.strictEqual(t1.baseRatePer15Min, 10);
+  assert.strictEqual(t1.baseRatePerHour, 40);
+  assert.strictEqual(t1.boostedRatePer15Min, 20);
+  assert.strictEqual(t1.boostedRatePerHour, 80);
+  assert.strictEqual(t1.boostedCreditsPerDay, 1920);
 
   const t2 = getBurnRequirementForTier(2);
   assert.strictEqual(t2.tierName, 'Charter Associate');
   assert.strictEqual(t2.requiredTokensUi, 250);
-  assert.strictEqual(t2.baseRatePerHour, 50);
-  assert.strictEqual(t2.boostedRatePerHour, 100);
-  assert.strictEqual(t2.boostedCreditsPerDay, 2400);
+  assert.strictEqual(t2.baseRatePer15Min, 50);
+  assert.strictEqual(t2.baseRatePerHour, 200);
+  assert.strictEqual(t2.boostedRatePer15Min, 100);
+  assert.strictEqual(t2.boostedRatePerHour, 400);
+  assert.strictEqual(t2.boostedCreditsPerDay, 9600);
 
   const t3 = getBurnRequirementForTier(3);
   assert.strictEqual(t3.tierName, 'Principal Partner');
   assert.strictEqual(t3.requiredTokensUi, 2000);
-  assert.strictEqual(t3.baseRatePerHour, 200);
-  assert.strictEqual(t3.boostedRatePerHour, 400);
-  assert.strictEqual(t3.boostedCreditsPerDay, 9600);
+  assert.strictEqual(t3.baseRatePer15Min, 200);
+  assert.strictEqual(t3.baseRatePerHour, 800);
+  assert.strictEqual(t3.boostedRatePer15Min, 400);
+  assert.strictEqual(t3.boostedRatePerHour, 1600);
+  assert.strictEqual(t3.boostedCreditsPerDay, 38400);
 
   const t4 = getBurnRequirementForTier(4);
   assert.strictEqual(t4.tierName, 'Syndicate Director');
   assert.strictEqual(t4.requiredTokensUi, 15000);
-  assert.strictEqual(t4.baseRatePerHour, 750);
-  assert.strictEqual(t4.boostedRatePerHour, 1500);
-  assert.strictEqual(t4.boostedCreditsPerDay, 36000);
+  assert.strictEqual(t4.baseRatePer15Min, 750);
+  assert.strictEqual(t4.baseRatePerHour, 3000);
+  assert.strictEqual(t4.boostedRatePer15Min, 1500);
+  assert.strictEqual(t4.boostedRatePerHour, 6000);
+  assert.strictEqual(t4.boostedCreditsPerDay, 144000);
 
   const t5 = getBurnRequirementForTier(5);
   assert.strictEqual(t5.tierName, 'Dynasty Magnate');
   assert.strictEqual(t5.requiredTokensUi, 100000);
-  assert.strictEqual(t5.baseRatePerHour, 2500);
-  assert.strictEqual(t5.boostedRatePerHour, 5000);
-  assert.strictEqual(t5.boostedCreditsPerDay, 120000);
+  assert.strictEqual(t5.baseRatePer15Min, 2500);
+  assert.strictEqual(t5.baseRatePerHour, 10000);
+  assert.strictEqual(t5.boostedRatePer15Min, 5000);
+  assert.strictEqual(t5.boostedRatePerHour, 20000);
+  assert.strictEqual(t5.boostedCreditsPerDay, 480000);
 
   assert.strictEqual(getBurnRequirementForTier(0), null);
 });
@@ -284,7 +294,7 @@ test('Credit Engine Accrual: boosted holder receives exactly 2.0x credit emissio
   const unboostedWallet = createTestWallet();
   const boostedWallet = createTestWallet();
 
-  // Seed both accounts with Tier 2 holdings (1,000 tokens → base rate 50 credits/hr)
+  // Seed both accounts with Tier 2 holdings (1,000 tokens → base rate 50/15m = 200 credits/hr)
   const now = Date.now();
   const twoHoursAgo = new Date(now - 2 * 3600 * 1000).toISOString();
 
@@ -295,7 +305,7 @@ test('Credit Engine Accrual: boosted holder receives exactly 2.0x credit emissio
     tokenBalanceUi: 1000,
     tier: 'Charter Associate',
     tierLevel: 2,
-    creditRatePerHour: 50,
+    creditRatePerHour: 200,
     lastVerifiedAt: twoHoursAgo,
     lastAccrualAt: twoHoursAgo
   });
@@ -307,7 +317,7 @@ test('Credit Engine Accrual: boosted holder receives exactly 2.0x credit emissio
     tokenBalanceUi: 1000,
     tier: 'Charter Associate',
     tierLevel: 2,
-    creditRatePerHour: 50,
+    creditRatePerHour: 200,
     lastVerifiedAt: twoHoursAgo,
     lastAccrualAt: twoHoursAgo
   });
@@ -319,22 +329,22 @@ test('Credit Engine Accrual: boosted holder receives exactly 2.0x credit emissio
     txSignature: generateMockSignature()
   });
 
-  // Accrue for unboosted wallet: 2 hours elapsed * 50 base rate = 100 credits
+  // Accrue for unboosted wallet: 2 hours elapsed * 200 base rate = 400 credits
   const unboostedRes = await accrueCreditsForHolder(unboostedWallet.address, { mockBalance: 1000 });
   assert.strictEqual(unboostedRes.boost.multiplier, 1.0);
-  assert.strictEqual(Number(unboostedRes.accrued), 100);
+  assert.strictEqual(Number(unboostedRes.accrued), 400);
 
-  // Accrue for boosted wallet: 2 hours elapsed * (50 base rate * 2.0x multiplier) = 200 credits
+  // Accrue for boosted wallet: 2 hours elapsed * (200 base rate * 2.0x multiplier) = 800 credits
   const boostedRes = await accrueCreditsForHolder(boostedWallet.address, { mockBalance: 1000 });
   assert.strictEqual(boostedRes.boost.multiplier, 2.0);
-  assert.strictEqual(boostedRes.effectiveRatePerHour, 100);
-  assert.strictEqual(Number(boostedRes.accrued), 200);
+  assert.strictEqual(boostedRes.effectiveRatePerHour, 400);
+  assert.strictEqual(Number(boostedRes.accrued), 800);
 
   // Ledger metadata confirms boostMultiplier was recorded
   const history = rewardsStore.getLedgerHistory(boostedWallet.address, 1);
   assert.strictEqual(history[0].type, 'EARN');
   assert.strictEqual(history[0].metadata.boostMultiplier, 2.0);
-  assert.strictEqual(history[0].metadata.effectiveRatePerHour, 100);
+  assert.strictEqual(history[0].metadata.effectiveRatePerHour, 400);
 });
 
 test('REST API: GET /api/boost/status and POST /api/boost/burn-verify', async () => {

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JEVBRAIN — Cinematic 3D Experience (Three.js WebGL)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="cinematic.css">
+</head>
+<body>
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Cinematic Visual Atmosphere -->
+  <div class="cinema-vignette"></div>
+
+  <!-- Top Cinema Header Bar -->
+  <header class="letterbox letterbox-top">
+    <a href="/" class="brand-badge" title="Return to Workspace">
+      <span class="brand-dot"></span>
+      <span class="brand-title">JEVBRAIN</span>
+      <span class="brand-tag">AI WORKSPACE</span>
+    </a>
+    <div class="top-telemetry">
+      <div class="tele-item">NETWORK: <span>SOLANA WEB3</span></div>
+      <div class="tele-item">MODELS: <span>510+ ROUTED</span></div>
+      <div class="tele-item">SECURITY: <span>WARDEN ACTIVE</span></div>
+    </div>
+  </header>
+
+  <!-- Animated Scene Titles Overlay (Informational & Cinematic) -->
+  <div class="titles-overlay">
+    <!-- Scene 01: Purpose & Protocol Introduction -->
+    <div class="scene-title-block active" id="title-s1">
+      <span class="main-kicker">SOLANA WEB3 // DECENTRALIZED AI WORKSPACE</span>
+      <h1 class="main-title">JEV BRAIN</h1>
+      <p class="main-subtitle">THE NON-CUSTODIAL AI COMPUTATIONAL PROTOCOL</p>
+      <div class="feature-pills-row">
+        <div class="feature-pill"><span class="pill-dot"></span> 510+ AI Models</div>
+        <div class="feature-pill"><span class="pill-dot"></span> Agent Warden Sandbox</div>
+        <div class="feature-pill"><span class="pill-dot"></span> 24/7 Passive Compute</div>
+        <div class="feature-pill"><span class="pill-dot"></span> Zero Subscriptions</div>
+      </div>
+    </div>
+
+    <!-- Scene 02: Dynamic Multi-Model Router (How It Works) -->
+    <div class="scene-title-block" id="title-s2">
+      <span class="main-kicker">01 // HOW IT WORKS · INTELLIGENT DISPATCH</span>
+      <h2 class="main-title">MULTI-MODEL AI ROUTER</h2>
+      <p class="main-subtitle">Sub-20ms dynamic dispatch routing prompts to optimal frontier models</p>
+      <div class="model-cards-grid">
+        <div class="mini-spec-card">
+          <div class="spec-head">Claude 3.7 Sonnet</div>
+          <div class="spec-desc">Complex Code &amp; Full-Stack Refactors</div>
+          <div class="spec-stat">LATENCY: &lt;18ms</div>
+        </div>
+        <div class="mini-spec-card">
+          <div class="spec-head">DeepSeek R1</div>
+          <div class="spec-desc">Deep Mathematical Reasoning &amp; Logic</div>
+          <div class="spec-stat">ACCURACY: 99.4%</div>
+        </div>
+        <div class="mini-spec-card">
+          <div class="spec-head">GPT-4.5 Architecture</div>
+          <div class="spec-desc">Autonomous Systems &amp; Planning</div>
+          <div class="spec-stat">MULTI-AGENT</div>
+        </div>
+        <div class="mini-spec-card">
+          <div class="spec-head">Grok 3 Real-Time</div>
+          <div class="spec-desc">Live Telemetry &amp; Market Sentiment</div>
+          <div class="spec-stat">STREAMING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 03: Autonomous Agents & Warden Firewall -->
+    <div class="scene-title-block" id="title-s3">
+      <span class="main-kicker">02 // HOW IT WORKS · AGENTIC SWARM</span>
+      <h2 class="main-title">AUTONOMOUS AGENTS &amp; SAFETY</h2>
+      <p class="main-subtitle">Self-governing AI agents executing within an AST-level zero-trust sandbox</p>
+      <div class="agents-flow-row">
+        <div class="agent-step-box">
+          <div class="agent-tag">AGENT 01</div>
+          <div class="agent-role">Research &amp; Context</div>
+          <div class="agent-info">Indexes codebase, maps dependencies &amp; AST</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="agent-step-box">
+          <div class="agent-tag">AGENT 02</div>
+          <div class="agent-role">Code &amp; Execution</div>
+          <div class="agent-info">Generates stacks, edits files &amp; runs test suites</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="agent-step-box highlight-warden">
+          <div class="agent-tag" style="color:#10b981;">WARDEN FIREWALL</div>
+          <div class="agent-role">Safety Verification</div>
+          <div class="agent-info">Pre-flight command analysis &amp; threat mitigation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 04: How to Use Jev Brain (Step-by-Step 4-Step Walkthrough) -->
+    <div class="scene-title-block" id="title-s4">
+      <span class="main-kicker">03 // HOW TO USE JEVBRAIN.WORLD · 4 SIMPLE STEPS</span>
+      <h2 class="main-title">HOW TO USE THE WORKSPACE</h2>
+      <p class="main-subtitle">Start building and coding in seconds with zero subscription or configuration lock</p>
+      <div class="steps-grid">
+        <div class="step-guide-card">
+          <div class="step-num">01</div>
+          <div class="step-meta">
+            <div class="step-name">Connect Wallet</div>
+            <div class="step-expl">Connect Phantom or Solflare. 100% Non-custodial — tokens never leave your wallet.</div>
+          </div>
+        </div>
+        <div class="step-guide-card">
+          <div class="step-num">02</div>
+          <div class="step-meta">
+            <div class="step-name">Accrue Credits</div>
+            <div class="step-expl">Proof-of-Holding automatically generates 24/7 compute credits with zero browser uptime.</div>
+          </div>
+        </div>
+        <div class="step-guide-card">
+          <div class="step-num">03</div>
+          <div class="step-meta">
+            <div class="step-name">Code &amp; Execute</div>
+            <div class="step-expl">Prompt 510+ models, build full-stack apps, or execute via native Local OS CLI.</div>
+          </div>
+        </div>
+        <div class="step-guide-card">
+          <div class="step-num">04</div>
+          <div class="step-meta">
+            <div class="step-name">Harvest &amp; Rewards</div>
+            <div class="step-expl">Burn excess credits to claim real SOL from the fee pool, or lock 2.0x lifetime boost.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 05: Economic Model — 15-Min Automated Fee Harvest & Rewards -->
+    <div class="scene-title-block" id="title-s5">
+      <span class="main-kicker">04 // PROTOCOL ECONOMICS · REAL VALUE CAPTURE</span>
+      <h2 class="main-title">15-MIN AUTOMATED FEE HARVEST</h2>
+      <p class="main-subtitle">Decentralized creator fees power compute infrastructure and community SOL reward pool</p>
+      <div class="metrics-trio-row">
+        <div class="metric-trio-card">
+          <div class="trio-val">100%</div>
+          <div class="trio-lbl">CREATOR FEES HARVESTED</div>
+          <div class="trio-sub">Systematically funds Distributable SOL Pool</div>
+        </div>
+        <div class="metric-trio-card">
+          <div class="trio-val">BURN → SOL</div>
+          <div class="trio-lbl">ON-CHAIN REDEMPTION</div>
+          <div class="trio-sub">Redeem idle compute credits for instant SOL</div>
+        </div>
+        <div class="metric-trio-card">
+          <div class="trio-val">2.0X BOOST</div>
+          <div class="trio-lbl">LIFETIME MULTIPLIER</div>
+          <div class="trio-sub">1-time burn doubles daily credit yield permanently</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 06: Macro Outro & Call to Action -->
+    <div class="scene-title-block" id="title-s6">
+      <span class="main-kicker">INITIALIZE YOUR WORKSPACE TODAY</span>
+      <h2 class="main-title">JEV BRAIN</h2>
+      <p class="main-subtitle">BUILD. THINK. EXECUTE.</p>
+      <div class="ca-pill-box">
+        <span class="ca-tag">OFFICIAL TOKEN CA:</span>
+        <span class="ca-hash">AxwSUUHx6hj8bgdtSxVUiKtKkZwmcDbNbEEtTvzfpump</span>
+      </div>
+      <div class="domain-cta-row">
+        <span class="domain-tag">jevbrain.world</span>
+        <span class="cta-pill">START NOW → ZERO SUBSCRIPTION</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Exploration Banner -->
+  <div class="interactive-banner" id="interactive-banner">
+    <span>● INTERACTIVE WORLD</span>
+    <span style="color: var(--text-dim);">Left Click: Orbit · Wheel: Zoom · Click Node: Inspect</span>
+  </div>
+
+  <!-- System Inspector Telemetry Drawer -->
+  <div class="system-inspector-drawer" id="inspector-drawer">
+    <div class="drawer-head">
+      <span class="drawer-tag" id="drawer-tag">SYSTEM // MODEL</span>
+      <button class="btn-ctrl" onclick="document.getElementById('inspector-drawer').classList.remove('open')">&times;</button>
+    </div>
+    <h3 class="drawer-title" id="drawer-title">Model &amp; Reasoning Core</h3>
+    <p class="drawer-desc" id="drawer-desc">Dynamic multi-model router evaluating 510+ frontier and pro models with sub-20ms latency.</p>
+    <div class="drawer-specs">
+      <div class="spec-box">
+        <span class="spec-k">ROUTING</span>
+        <span class="spec-v" id="drawer-spec-1">510+ MODELS</span>
+      </div>
+      <div class="spec-box">
+        <span class="spec-k">FIREWALL</span>
+        <span class="spec-v" id="drawer-spec-2">&lt;1.2ms LATENCY</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Director Controls Floating Dock -->
+  <div class="director-dock">
+    <button class="btn-ctrl btn-ctrl-primary" id="btn-play">
+      ▶ <span>PLAY</span>
+    </button>
+    <button class="btn-ctrl" id="btn-restart" title="Restart Sequence">
+      ↺ <span>RESTART</span>
+    </button>
+    <div class="dock-sep"></div>
+    <div class="timeline-scrubber">
+      <span class="time-display" id="time-display">00:00.00</span>
+      <div class="scrub-track" id="scrub-track" title="Seek timeline">
+        <div class="scrub-fill" id="scrub-fill"></div>
+      </div>
+    </div>
+    <div class="dock-sep"></div>
+    <button class="btn-ctrl" id="btn-mute" title="Toggle Synthetic Ambient Audio">
+      🔇 <span>UNMUTE</span>
+    </button>
+    <button class="btn-ctrl" id="btn-interactive" title="Explore in 3D">
+      🌐 <span>EXPLORE</span>
+    </button>
+    <button class="btn-ctrl" id="btn-fullscreen" title="Toggle Fullscreen" onclick="if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen();">
+      ⛶
+    </button>
+  </div>
+
+  <!-- Bottom Cinema Footer Bar -->
+  <footer class="letterbox letterbox-bottom">
+    <div>SYNTACTIC ENGINE // REAL-TIME DETERMINISTIC WEBGL</div>
+    <div>JEVBRAIN COMPUTATIONAL ARCHITECTURE &copy; 2026</div>
+  </footer>
+
+  <!-- Initial User-Gesture Start Modal (Autoplay policy friendly) -->
+  <div class="start-modal" id="start-modal">
+    <div class="start-icon-wrap">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+      </svg>
+    </div>
+    <h2 class="start-title">JEVBRAIN</h2>
+    <p class="start-sub">CLICK TO ENTER 3D COMPUTATIONAL EXPERIENCE</p>
+  </div>
+
+  <!-- Import Three.js Engine -->
+  <script type="module" src="cinematic.js"></script>
+</body>
+</html>

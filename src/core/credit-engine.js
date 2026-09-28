@@ -49,12 +49,40 @@ export async function accrueCreditsForHolder(walletAddress, options = {}) {
   const isTestForce = process.env.NODE_ENV === 'test' && options.forceAmount !== undefined;
 
   if (!isTestForce && (!eligibility.eligible || eligibility.creditRatePerHour <= 0)) {
-    return {
-      accrued: '0',
-      reason: 'Wallet holds insufficient $jevbrain tokens to qualify for credits.',
-      eligibility,
-      balance: rewardsStore.getAccountSummary(address)
-    };
+    // FIX (yield stuck): distinguish a transient on-chain verification outage from a
+    // genuinely empty wallet. During an RPC outage getHolderEligibility returns
+    // eligible:false + error — previously this returned "insufficient tokens" and froze
+    // accrual even though the holder row holds a verified tier. Fall back to the last
+    // on-chain-verified DB tier (same trust model as HolderAccrualDaemon) so yield keeps
+    // accruing through RPC blips. lastAccrualAt is never advanced on failure, so no
+    // elapsed time / credits are lost while paused.
+    const verificationFailed = Boolean(eligibility.error);
+    const dbTierUsable = holderAccount
+      && Number(holderAccount.tierLevel || 0) > 0
+      && Number(holderAccount.creditRatePerHour || 0) > 0;
+
+    if (verificationFailed && dbTierUsable) {
+      eligibility = {
+        eligible: true,
+        walletAddress: address,
+        tier: holderAccount.tier,
+        tierLevel: holderAccount.tierLevel,
+        creditRatePerHour: holderAccount.creditRatePerHour,
+        balanceUi: holderAccount.tokenBalanceUi,
+        balanceRaw: holderAccount.tokenBalanceRaw,
+        fromDb: true,
+        usedDbFallback: true
+      };
+    } else {
+      return {
+        accrued: '0',
+        reason: verificationFailed
+          ? 'On-chain verification is temporarily unavailable. Accrual is paused (not lost) and resumes automatically with full catch-up once RPC recovers.'
+          : 'Wallet holds insufficient $jevbrain tokens to qualify for credits.',
+        eligibility,
+        balance: rewardsStore.getAccountSummary(address)
+      };
+    }
   }
 
   if (!holderAccount) {
@@ -130,57 +158,73 @@ export async function accrueCreditsForHolder(walletAddress, options = {}) {
     : elapsedMs;
   const newAccrualTs = new Date(lastAccrued + creditedTimeMs).toISOString();
 
-  // B-4 FIX: Atomic conditional accrual — prevent double-accrual across cold starts
+  // B-4 FIX: Atomic conditional accrual — prevent double-accrual across cold starts.
+  // FIX (silent credit loss): clock advance + ledger write + snapshot now commit as ONE
+  // ACID transaction. Previously the clock advanced FIRST and the ledger write could
+  // still throw (DB error / invariant) — the elapsed window was consumed but never
+  // credited, permanently burning the user's yield. On any ledger failure the whole
+  // transaction rolls back (including the clock), so the next attempt re-earns the
+  // full window instead of losing it.
   const expectedAccrualTs = lastAccrualIso || holderAccount.lastAccrualAt;
-  if (!isForceTest && expectedAccrualTs) {
-    const updated = dbAdapter.conditionalUpdateAccrualTime(address, expectedAccrualTs, newAccrualTs);
-    if (!updated) {
-      // Another process already advanced the accrual timestamp — skip to prevent double-earning
-      return {
-        accrued: '0',
-        reason: 'Accrual already processed by another instance.',
-        eligibility,
-        balance: rewardsStore.getAccountSummary(address),
-        boost: {
-          level: Number(holderAccount?.boostLevel || 1),
-          multiplier: effectiveMultiplier
-        }
-      };
-    }
-  } else {
-    // First-time accrual or test forceAmount — use non-conditional update
-    dbAdapter.updateLastAccrualTime(address, newAccrualTs);
-  }
-
   const snapshotId = `snap_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  let entry = null;
+  let racedLost = false;
 
-  const { entry, account } = rewardsStore.recordLedgerEntry({
-    walletAddress: address,
-    type: 'EARN',
-    amount: BigInt(creditsToEarn),
-    referenceId: snapshotId,
-    metadata: {
-      tier: eligibility.tier,
-      tierLevel: eligibility.tierLevel,
-      baseRatePerHour: eligibility.creditRatePerHour,
-      boostMultiplier: effectiveMultiplier,
-      effectiveRatePerHour,
-      tokenBalanceUi: eligibility.balanceUi,
-      elapsedHours: Number(elapsedHours.toFixed(2))
+  dbAdapter.transaction(() => {
+    if (!isForceTest && expectedAccrualTs) {
+      const updated = dbAdapter.conditionalUpdateAccrualTime(address, expectedAccrualTs, newAccrualTs);
+      if (!updated) {
+        // Another process already advanced the accrual timestamp — commit nothing new,
+        // skip to prevent double-earning.
+        racedLost = true;
+        return;
+      }
+    } else {
+      // First-time accrual or test forceAmount — use non-conditional update
+      dbAdapter.updateLastAccrualTime(address, newAccrualTs);
     }
+
+    entry = rewardsStore.recordLedgerEntry({
+      walletAddress: address,
+      type: 'EARN',
+      amount: BigInt(creditsToEarn),
+      referenceId: snapshotId,
+      metadata: {
+        tier: eligibility.tier,
+        tierLevel: eligibility.tierLevel,
+        baseRatePerHour: eligibility.creditRatePerHour,
+        boostMultiplier: effectiveMultiplier,
+        effectiveRatePerHour,
+        tokenBalanceUi: eligibility.balanceUi,
+        elapsedHours: Number(elapsedHours.toFixed(2))
+      }
+    }).entry;
+
+    // Persist snapshot in the same transaction (FK to holder_accounts satisfied above)
+    dbAdapter.insertHolderSnapshot({
+      id: snapshotId,
+      walletAddress: address,
+      balanceRaw: eligibility.balanceRaw || '0',
+      balanceUi: eligibility.balanceUi || 0,
+      tier: eligibility.tier,
+      creditRatePerHour: effectiveRatePerHour,
+      creditsAccrued: creditsToEarn,
+      snapshotAt: nowIso
+    });
   });
 
-  // Persist snapshot to database (accrual time already persisted above)
-  dbAdapter.insertHolderSnapshot({
-    id: snapshotId,
-    walletAddress: address,
-    balanceRaw: eligibility.balanceRaw || '0',
-    balanceUi: eligibility.balanceUi || 0,
-    tier: eligibility.tier,
-    creditRatePerHour: effectiveRatePerHour,
-    creditsAccrued: creditsToEarn,
-    snapshotAt: nowIso
-  });
+  if (racedLost) {
+    return {
+      accrued: '0',
+      reason: 'Accrual already processed by another instance.',
+      eligibility,
+      balance: rewardsStore.getAccountSummary(address),
+      boost: {
+        level: Number(holderAccount?.boostLevel || 1),
+        multiplier: effectiveMultiplier
+      }
+    };
+  }
 
   return {
     accrued: creditsToEarn.toString(),

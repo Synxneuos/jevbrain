@@ -322,6 +322,36 @@
       border: 1px solid rgba(2,132,199,0.25);
       color: #38bdf8;
     }
+
+    @media (max-width: 768px) {
+      .verify-nav {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .nav-links-group {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .verify-main {
+        margin: 20px auto;
+        padding: 0 14px 60px;
+      }
+      .verify-card {
+        padding: 20px 16px;
+      }
+      .verify-title {
+        font-size: 20px;
+      }
+      .step-box {
+        padding: 16px 12px;
+      }
+      .receipt-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body class="verify-page-layout">
@@ -340,7 +370,8 @@
       <span style="font-weight:600; font-size:14px; letter-spacing:-0.01em;">Jev Brain</span>
       <span style="font-size:11px; color:#71717a; font-family:monospace;">/ DISCORD VERIFY</span>
     </a>
-    <div class="nav-links-group">
+    <div class="nav-links-group" style="display:flex; align-items:center; gap:10px;">
+      <a href="/burning-day.html" class="secondary-verify-btn" style="color:#f97316;border-color:rgba(249,115,22,0.4);font-weight:600;" title="Burning Day · P2P Compute & Burn Market">🔥 Burning Day (P2P)</a>
       <a href="/rules.html" class="secondary-verify-btn">Server Rules & Roles ↗</a>
       <a href="/" class="secondary-verify-btn">← Back to Workspace</a>
     </div>

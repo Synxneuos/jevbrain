@@ -104,6 +104,7 @@ export class DatabaseAdapter {
 
     db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
       PRAGMA foreign_keys = ON;
 
       -- 1. HOLDER ACCOUNTS
@@ -381,6 +382,37 @@ export class DatabaseAdapter {
       );
       CREATE INDEX IF NOT EXISTS idx_burn_receipts_wallet ON token_burn_receipts(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_burn_receipts_sig ON token_burn_receipts(tx_signature);
+
+      -- 19. P2P CREDIT ORDERS (Burning Day Market)
+      CREATE TABLE IF NOT EXISTS p2p_credit_orders (
+        order_id TEXT PRIMARY KEY,
+        seller_wallet TEXT NOT NULL,
+        credits_amount INTEGER NOT NULL,
+        price_sol REAL NOT NULL,
+        price_lamports TEXT NOT NULL,
+        tokens_to_burn_raw TEXT NOT NULL,
+        tokens_to_burn_ui REAL NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ACTIVE', -- ACTIVE, PURCHASE_PENDING, JEV_BURN_CONFIRMED, SOL_PAYOUT_SUBMITTED, COMPLETED, FILLED, CANCELLED, RECOVERY_REQUIRED
+        buyer_wallet TEXT DEFAULT NULL,
+        tx_signature TEXT DEFAULT NULL UNIQUE,
+        jev_burn_signature TEXT DEFAULT NULL UNIQUE,
+        sol_payout_signature TEXT DEFAULT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        filled_at TEXT DEFAULT NULL,
+        cancelled_at TEXT DEFAULT NULL,
+        metadata TEXT DEFAULT '{}',
+        FOREIGN KEY (seller_wallet) REFERENCES holder_accounts(wallet_address)
+      );
+      CREATE INDEX IF NOT EXISTS idx_p2p_orders_status ON p2p_credit_orders(status);
+      CREATE INDEX IF NOT EXISTS idx_p2p_orders_seller ON p2p_credit_orders(seller_wallet);
+      CREATE INDEX IF NOT EXISTS idx_p2p_orders_sig ON p2p_credit_orders(tx_signature);
+
+      -- 20. WALLET DOCKETS (Stable public Live Audit numbering: exactly one docket per wallet)
+      CREATE TABLE IF NOT EXISTS wallet_dockets (
+        docket_number INTEGER PRIMARY KEY AUTOINCREMENT,
+        wallet_address TEXT UNIQUE NOT NULL,
+        created_at TEXT NOT NULL
+      );
     `);
 
     // Durable SQLite synchronous setting
@@ -417,10 +449,15 @@ export class DatabaseAdapter {
     try { db.exec(`ALTER TABLE holder_accounts ADD COLUMN last_burn_tx_hash TEXT DEFAULT NULL;`); } catch {}
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_holder_accounts_boost ON holder_accounts(boost_level);`); } catch {}
 
+    // Migration: P2P credit orders dual-signature columns and indexes
+    try { db.exec(`ALTER TABLE p2p_credit_orders ADD COLUMN jev_burn_signature TEXT DEFAULT NULL;`); } catch {}
+    try { db.exec(`ALTER TABLE p2p_credit_orders ADD COLUMN sol_payout_signature TEXT DEFAULT NULL;`); } catch {}
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_p2p_orders_jev_sig ON p2p_credit_orders(jev_burn_signature);`); } catch {}
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_p2p_orders_sol_sig ON p2p_credit_orders(sol_payout_signature);`); } catch {}
+
     // Auto-seed VIP Operator accounts, credit balances, and API keys for whitelisted operator wallets
     try {
       const vipWallets = [
-        { wallet: '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx', key: 'jev_live_vip_2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx', id: 'key_operator_vip_2yHe' },
         { wallet: 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn', key: 'jev_live_vip_HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn', id: 'key_operator_vip_HqHQ' }
       ];
       const now = new Date().toISOString();
@@ -433,7 +470,7 @@ export class DatabaseAdapter {
               wallet_address, token_balance_raw, token_balance_ui, tier,
               tier_level, credit_rate_per_hour, boost_level, boost_multiplier,
               last_verified_at, last_accrual_at, created_at, updated_at
-            ) VALUES (?, '1000000000000', 1000000.0, 'Dynasty Magnate (VIP Whitelist)', 5, 5000, 1, 1.0, ?, ?, ?, ?)
+            ) VALUES (?, '1000000000000', 1000000.0, 'Dynasty Magnate (VIP Whitelist)', 5, 20000, 1, 1.0, ?, ?, ?, ?)
           `).run(item.wallet, now, now, now, now);
         }
 
@@ -468,8 +505,7 @@ export class DatabaseAdapter {
       // One-time restitution migration for wallets whose credits were reset during container transitions
       const historicalRestores = [
         // VIP Operator Authority
-        { wallet: '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx', earned: '105000', available: '104847', tier: 'Dynasty Magnate (VIP Whitelist)', tierLevel: 5, rate: 5000, tokens: 1000000, boostLevel: 2, boostMultiplier: 2.0 },
-        { wallet: 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn', earned: '105000', available: '104837', tier: 'Dynasty Magnate (VIP Whitelist)', tierLevel: 5, rate: 5000, tokens: 1000000, boostLevel: 2, boostMultiplier: 2.0 },
+        { wallet: 'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn', earned: '105000', available: '104837', tier: 'Dynasty Magnate (VIP Whitelist)', tierLevel: 5, rate: 20000, tokens: 1000000, boostLevel: 2, boostMultiplier: 2.0 },
         
         // Tier 5 Dynasty Magnates
         { wallet: 'GX3We1me16U7snFAqe76MzsWB7HEbWd1TDvU7eFYg2Tp', earned: '65000', available: '60000', tier: 'Dynasty Magnate', tierLevel: 5, rate: 2500, tokens: 2347995 },
@@ -579,6 +615,33 @@ export class DatabaseAdapter {
           `).run(rec.available, usedAmt, rec.earned, rec.earned, now, rec.wallet);
         }
       }
+
+      // Ensure ZERO mock or synthetic seed orders exist in SQLite for Burning Day P2P Market
+      try {
+        db.prepare("DELETE FROM p2p_credit_orders WHERE order_id LIKE 'p2p_ord_seed_%'").run();
+      } catch {}
+
+      // Security Revocation: Purge all VIP privileges, API keys, and free credits for compromised wallet 2yHe...
+      try {
+        db.exec(`
+          DELETE FROM api_keys WHERE wallet_address = '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx' OR key_id = 'key_operator_vip_2yHe';
+          UPDATE holder_accounts SET tier = 'Revoked (Compromised Key)', tier_level = 0, credit_rate_per_hour = 0, boost_level = 1, boost_multiplier = 1.0 WHERE wallet_address = '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx';
+          UPDATE credit_accounts SET available = '0', earned = CAST(used AS INTEGER) + CAST(transferred AS INTEGER) + CAST(redeemed AS INTEGER) WHERE wallet_address = '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx';
+        `);
+      } catch {}
+
+      // 4x Credit Emission Supercharge Migration (1-hr yield now generated every 15 minutes):
+      // Automatically upgrade all existing holder_accounts to the 4x credit_rate_per_hour
+      try {
+        db.exec(`
+          UPDATE holder_accounts SET credit_rate_per_hour = 40 WHERE tier_level = 1 AND credit_rate_per_hour < 40;
+          UPDATE holder_accounts SET credit_rate_per_hour = 200 WHERE tier_level = 2 AND credit_rate_per_hour < 200;
+          UPDATE holder_accounts SET credit_rate_per_hour = 800 WHERE tier_level = 3 AND credit_rate_per_hour < 800;
+          UPDATE holder_accounts SET credit_rate_per_hour = 3000 WHERE tier_level = 4 AND credit_rate_per_hour < 3000;
+          UPDATE holder_accounts SET credit_rate_per_hour = 10000 WHERE tier_level = 5 AND credit_rate_per_hour < 10000;
+          UPDATE holder_accounts SET credit_rate_per_hour = 20000 WHERE tier LIKE '%VIP Whitelist%' AND credit_rate_per_hour < 20000;
+        `);
+      } catch {}
 
       // Auto-reconcile any accounts with invariant discrepancies from past manual seeding
       db.prepare(`
@@ -1856,6 +1919,544 @@ export class DatabaseAdapter {
       walletAddress
     );
     return this.getHolderAccount(walletAddress);
+  }
+
+  // ── P2P CREDIT ORDERS (Burning Day Market) ────────────────────────────────
+
+  mapP2POrderRow(row) {
+    if (!row) return null;
+    let metadata = {};
+    try {
+      metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+    } catch {}
+
+    return {
+      orderId: row.order_id,
+      sellerWallet: row.seller_wallet,
+      creditsAmount: Number(row.credits_amount),
+      priceSol: Number(row.price_sol),
+      priceLamports: String(row.price_lamports),
+      tokensToBurnRaw: String(row.tokens_to_burn_raw),
+      tokensToBurnUi: Number(row.tokens_to_burn_ui),
+      status: row.status,
+      buyerWallet: row.buyer_wallet || null,
+      txSignature: row.tx_signature || null,
+      jevBurnSignature: row.jev_burn_signature || row.tx_signature || null,
+      solPayoutSignature: row.sol_payout_signature || null,
+      createdAt: row.created_at,
+      filledAt: row.filled_at || null,
+      cancelledAt: row.cancelled_at || null,
+      metadata
+    };
+  }
+
+  getP2POrder(orderId) {
+    const db = this.getDb();
+    const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE order_id = ?').get(orderId);
+    return this.mapP2POrderRow(row);
+  }
+
+  getP2POrderBySignature(txSignature) {
+    if (!txSignature) return null;
+    const db = this.getDb();
+    const sig = txSignature.trim();
+    const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE tx_signature = ? OR jev_burn_signature = ? OR sol_payout_signature = ?').get(sig, sig, sig);
+    return this.mapP2POrderRow(row);
+  }
+
+  getP2POrderByBurnSignature(sig) {
+    if (!sig) return null;
+    const db = this.getDb();
+    const clean = sig.trim();
+    const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE jev_burn_signature = ? OR tx_signature = ?').get(clean, clean);
+    return this.mapP2POrderRow(row);
+  }
+
+  getP2POrderBySolPayoutSignature(sig) {
+    if (!sig) return null;
+    const db = this.getDb();
+    const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE sol_payout_signature = ?').get(sig.trim());
+    return this.mapP2POrderRow(row);
+  }
+
+  assertCreditAccountInvariants(account) {
+    if (!account) return;
+    const avail = BigInt(account.available ?? '0');
+    const earned = BigInt(account.earned ?? '0');
+    const used = BigInt(account.used ?? '0');
+    const transferred = BigInt(account.transferred ?? '0');
+    const redeemed = BigInt(account.redeemed ?? '0');
+
+    if (avail < 0n) {
+      throw new Error(`Financial Invariant Violation: available credits cannot be negative (${avail})`);
+    }
+    const totalOut = used + transferred + redeemed;
+    if (earned < totalOut) {
+      throw new Error(`Financial Invariant Violation: earned credits (${earned}) < total outgoing (${totalOut})`);
+    }
+    if (avail !== (earned - totalOut)) {
+      throw new Error(`Financial Invariant Violation: balance mismatch (available: ${avail}, expected: ${earned - totalOut})`);
+    }
+  }
+
+  createP2POrder({ orderId, sellerWallet, creditsAmount, priceSol, priceLamports, tokensToBurnRaw, tokensToBurnUi, metadata = {} }) {
+    const seller = (sellerWallet || '').trim();
+    const credits = Number(creditsAmount);
+    const sol = Number(priceSol);
+
+    if (!orderId) throw new Error('Order ID is required.');
+    if (!seller) throw new Error('Seller wallet is required.');
+    if (!Number.isFinite(credits) || credits <= 0) throw new Error('Credits amount must be positive.');
+    if (!Number.isFinite(sol) || sol <= 0) throw new Error('Price in SOL must be positive.');
+
+    return this.transaction(() => {
+      const db = this.getDb();
+      const account = this.getCreditAccount(seller);
+      if (!account || account.available < BigInt(credits)) {
+        throw new Error(`Insufficient available credits to create listing: requested ${credits}, available ${account?.available ?? 0}`);
+      }
+
+      const now = new Date().toISOString();
+      const newAvail = (account.available - BigInt(credits)).toString();
+      const newTransferred = (account.transferred + BigInt(credits)).toString();
+
+      // Assert financial invariant before committing escrow
+      this.assertCreditAccountInvariants({
+        ...account,
+        available: BigInt(newAvail),
+        transferred: BigInt(newTransferred)
+      });
+
+      // Escrow credits: available -> transferred
+      db.prepare(`
+        UPDATE credit_accounts
+        SET available = ?, transferred = ?, updated_at = ?
+        WHERE wallet_address = ?
+      `).run(newAvail, newTransferred, now, seller);
+
+      // Record P2P_ESCROW in immutable ledger
+      this.insertCreditLedgerEntry({
+        id: `ledg_p2p_escrow_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        walletAddress: seller,
+        type: 'P2P_ESCROW',
+        amount: BigInt(credits),
+        balanceAfter: BigInt(newAvail),
+        referenceId: orderId,
+        metadata: { priceSol: sol, tokensToBurnUi, ...metadata },
+        timestamp: now
+      });
+
+      // Insert order
+      db.prepare(`
+        INSERT INTO p2p_credit_orders (
+          order_id, seller_wallet, credits_amount, price_sol, price_lamports,
+          tokens_to_burn_raw, tokens_to_burn_ui, status, created_at, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+      `).run(
+        orderId,
+        seller,
+        credits,
+        sol,
+        String(priceLamports),
+        String(tokensToBurnRaw),
+        Number(tokensToBurnUi),
+        now,
+        JSON.stringify(metadata)
+      );
+
+      this.recordAuditEvent('P2P_ORDER_CREATED', seller, seller, {
+        orderId,
+        creditsAmount: credits,
+        priceSol: sol,
+        tokensToBurnUi
+      });
+
+      return this.getP2POrder(orderId);
+    });
+  }
+
+  cancelP2POrder(orderId, callerWallet) {
+    const caller = (callerWallet || '').trim();
+    if (!orderId) throw new Error('Order ID is required.');
+    if (!caller) throw new Error('Caller wallet is required for cancellation authorization.');
+
+    return this.transaction(() => {
+      const db = this.getDb();
+      const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE order_id = ?').get(orderId);
+      if (!row) throw new Error(`P2P order not found: ${orderId}`);
+      if (row.status !== 'ACTIVE') throw new Error(`Order is not ACTIVE (current status: ${row.status})`);
+
+      const isOwner = row.seller_wallet === caller;
+      const isOperator = [
+        'HqHQf559KsuC7dKaSdUMu7v3gzy3v8BdmK4qBiGhjbSn',
+        '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx',
+        (process.env.ADMIN_WALLET || '').trim()
+      ].includes(caller);
+
+      if (!isOwner && !isOperator) {
+        throw new Error('Unauthorized: Only order seller or system operator can cancel an active listing.');
+      }
+
+      const now = new Date().toISOString();
+      const credits = BigInt(row.credits_amount);
+
+      // Refund escrowed credits: transferred -> available
+      const account = this.getCreditAccount(row.seller_wallet);
+      if (account) {
+        if (account.transferred < credits) {
+          throw new Error(`Escrow accounting invariant error: seller transferred credits (${account.transferred}) < refund amount (${credits})`);
+        }
+        const newTransferred = (account.transferred - credits).toString();
+        const newAvail = (account.available + credits).toString();
+
+        // Assert financial invariant before committing refund
+        this.assertCreditAccountInvariants({
+          ...account,
+          available: BigInt(newAvail),
+          transferred: BigInt(newTransferred)
+        });
+
+        db.prepare(`
+          UPDATE credit_accounts
+          SET available = ?, transferred = ?, updated_at = ?
+          WHERE wallet_address = ?
+        `).run(newAvail, newTransferred, now, row.seller_wallet);
+
+        // Record P2P_REFUND in immutable ledger
+        this.insertCreditLedgerEntry({
+          id: `ledg_p2p_refund_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          walletAddress: row.seller_wallet,
+          type: 'P2P_REFUND',
+          amount: credits,
+          balanceAfter: BigInt(newAvail),
+          referenceId: orderId,
+          metadata: { cancelledBy: caller, isOperatorOverride: !isOwner && isOperator },
+          timestamp: now
+        });
+      }
+
+      db.prepare(`
+        UPDATE p2p_credit_orders
+        SET status = 'CANCELLED', cancelled_at = ?
+        WHERE order_id = ?
+      `).run(now, orderId);
+
+      this.recordAuditEvent('P2P_ORDER_CANCELLED', caller, row.seller_wallet, {
+        orderId,
+        creditsRefunded: Number(row.credits_amount),
+        isOperatorOverride: !isOwner && isOperator
+      });
+
+      return this.getP2POrder(orderId);
+    });
+  }
+
+  lockP2POrder(orderId, buyerWallet) {
+    const buyer = (buyerWallet || '').trim();
+    if (!orderId) throw new Error('Order ID is required.');
+    if (!buyer) throw new Error('Buyer wallet is required.');
+
+    return this.transaction(() => {
+      const db = this.getDb();
+      const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE order_id = ?').get(orderId);
+      if (!row) throw new Error(`P2P order not found: ${orderId}`);
+      if (row.seller_wallet === buyer) throw new Error('Self-dealing violation: You cannot purchase your own credit listing.');
+
+      if (row.status === 'ACTIVE') {
+        db.prepare(`
+          UPDATE p2p_credit_orders
+          SET status = 'PURCHASE_PENDING', buyer_wallet = ?
+          WHERE order_id = ?
+        `).run(buyer, orderId);
+      } else if (row.status === 'PURCHASE_PENDING') {
+        if (row.buyer_wallet && row.buyer_wallet !== buyer) {
+          throw new Error('Order is currently reserved by another buyer.');
+        }
+      } else {
+        throw new Error(`Order is not available for purchase (current status: ${row.status})`);
+      }
+
+      return this.getP2POrder(orderId);
+    });
+  }
+
+  updateP2POrderStatus(orderId, status, { buyerWallet = null, jevBurnSignature = null, solPayoutSignature = null, metadata = null } = {}) {
+    if (!orderId) throw new Error('Order ID is required.');
+    if (!status) throw new Error('Status is required.');
+
+    return this.transaction(() => {
+      const db = this.getDb();
+      const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE order_id = ?').get(orderId);
+      if (!row) throw new Error(`P2P order not found: ${orderId}`);
+
+      let metaObj = {};
+      try {
+        metaObj = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+      } catch {}
+      if (metadata && typeof metadata === 'object') {
+        metaObj = { ...metaObj, ...metadata };
+      }
+
+      const updates = ['status = ?'];
+      const params = [status];
+
+      if (buyerWallet) {
+        updates.push('buyer_wallet = ?');
+        params.push(buyerWallet.trim());
+      }
+      if (jevBurnSignature) {
+        const cleanBurnSig = jevBurnSignature.trim();
+        updates.push('jev_burn_signature = ?');
+        params.push(cleanBurnSig);
+        updates.push('tx_signature = COALESCE(tx_signature, ?)');
+        params.push(cleanBurnSig);
+      }
+      if (solPayoutSignature) {
+        updates.push('sol_payout_signature = ?');
+        params.push(solPayoutSignature.trim());
+      }
+      updates.push('metadata = ?');
+      params.push(JSON.stringify(metaObj));
+
+      params.push(orderId);
+
+      db.prepare(`UPDATE p2p_credit_orders SET ${updates.join(', ')} WHERE order_id = ?`).run(...params);
+
+      return this.getP2POrder(orderId);
+    });
+  }
+
+  fillP2POrder({ orderId, buyerWallet, jevBurnSignature, solPayoutSignature, txSignature }) {
+    const buyer = (buyerWallet || '').trim();
+    const sig = (jevBurnSignature || txSignature || '').trim();
+    const payoutSig = (solPayoutSignature || '').trim() || null;
+
+    if (!orderId) throw new Error('Order ID is required.');
+    if (!buyer) throw new Error('Buyer wallet is required.');
+    if (!sig) throw new Error('Transaction signature is required.');
+
+    return this.transaction(() => {
+      const db = this.getDb();
+      const row = db.prepare('SELECT * FROM p2p_credit_orders WHERE order_id = ?').get(orderId);
+      if (!row) throw new Error(`P2P order not found: ${orderId}`);
+      if (!['ACTIVE', 'PURCHASE_PENDING', 'JEV_BURN_CONFIRMED', 'SOL_PAYOUT_SUBMITTED'].includes(row.status)) {
+        throw new Error(`Order is not in an actionable state (current status: ${row.status})`);
+      }
+      if (row.seller_wallet === buyer) throw new Error('Self-dealing violation: You cannot purchase your own credit listing.');
+
+      // Check if signature already used
+      const existingSig = db.prepare('SELECT order_id FROM p2p_credit_orders WHERE (tx_signature = ? OR jev_burn_signature = ?) AND order_id != ?').get(sig, sig, orderId);
+      if (existingSig) throw new Error(`Transaction signature has already been used for order ${existingSig.order_id}`);
+
+      if (payoutSig) {
+        const existingPayoutSig = db.prepare('SELECT order_id FROM p2p_credit_orders WHERE sol_payout_signature = ? AND order_id != ?').get(payoutSig, orderId);
+        if (existingPayoutSig) throw new Error(`SOL payout signature has already been used for order ${existingPayoutSig.order_id}`);
+      }
+
+      const now = new Date().toISOString();
+      const credits = BigInt(row.credits_amount);
+
+      // Ensure buyer has a credit account (and holder account to satisfy foreign key)
+      let buyerHolder = this.getHolderAccount(buyer);
+      if (!buyerHolder) {
+        this.upsertHolderAccount({
+          walletAddress: buyer,
+          tokenBalanceRaw: '0',
+          tokenBalanceUi: 0,
+          tier: 'None',
+          tierLevel: 0,
+          creditRatePerHour: 0
+        });
+      }
+
+      let buyerAcc = this.getCreditAccount(buyer);
+      if (!buyerAcc) {
+        buyerAcc = {
+          walletAddress: buyer,
+          creditAccountId: 'acc_' + buyer.slice(0, 8),
+          earned: 0n,
+          used: 0n,
+          available: 0n,
+          transferred: 0n,
+          redeemed: 0n
+        };
+        this.upsertCreditAccount(buyerAcc);
+      }
+
+      // 1. Finalize seller ledger: P2P_SOLD (audit record)
+      const sellerAcc = this.getCreditAccount(row.seller_wallet);
+      this.insertCreditLedgerEntry({
+        id: `ledg_p2p_sold_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        walletAddress: row.seller_wallet,
+        type: 'P2P_SOLD',
+        amount: credits,
+        balanceAfter: sellerAcc?.available ?? 0n,
+        referenceId: orderId,
+        metadata: { buyer, txSignature: sig, jevBurnSignature: sig, solPayoutSignature: payoutSig, priceSol: row.price_sol },
+        timestamp: now
+      });
+
+      // 2. Deliver credits to buyer: earned += credits, available += credits
+      const newBuyerEarned = (buyerAcc.earned + credits).toString();
+      const newBuyerAvail = (buyerAcc.available + credits).toString();
+
+      // Assert financial invariant before committing buyer credit delivery
+      this.assertCreditAccountInvariants({
+        ...buyerAcc,
+        earned: BigInt(newBuyerEarned),
+        available: BigInt(newBuyerAvail)
+      });
+
+      db.prepare(`
+        UPDATE credit_accounts
+        SET earned = ?, available = ?, updated_at = ?
+        WHERE wallet_address = ?
+      `).run(newBuyerEarned, newBuyerAvail, now, buyer);
+
+      this.insertCreditLedgerEntry({
+        id: `ledg_p2p_bought_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        walletAddress: buyer,
+        type: 'P2P_BOUGHT',
+        amount: credits,
+        balanceAfter: BigInt(newBuyerAvail),
+        referenceId: orderId,
+        metadata: {
+          seller: row.seller_wallet,
+          txSignature: sig,
+          jevBurnSignature: sig,
+          solPayoutSignature: payoutSig,
+          priceSol: row.price_sol,
+          tokensBurnedUi: row.tokens_to_burn_ui
+        },
+        timestamp: now
+      });
+
+      // 3. Mark order COMPLETED
+      db.prepare(`
+        UPDATE p2p_credit_orders
+        SET status = 'COMPLETED', buyer_wallet = ?, tx_signature = ?, jev_burn_signature = ?, sol_payout_signature = ?, filled_at = ?
+        WHERE order_id = ?
+      `).run(buyer, sig, sig, payoutSig, now, orderId);
+
+      this.recordAuditEvent('P2P_ORDER_COMPLETED', buyer, row.seller_wallet, {
+        orderId,
+        creditsDelivered: Number(row.credits_amount),
+        priceSol: row.price_sol,
+        tokensBurnedUi: row.tokens_to_burn_ui,
+        jevBurnSignature: sig,
+        solPayoutSignature: payoutSig
+      });
+
+      return this.getP2POrder(orderId);
+    });
+  }
+
+  listP2POrders({ status = 'ACTIVE', sellerWallet = null, limit = 50, offset = 0, sort = 'price_asc' } = {}) {
+    const db = this.getDb();
+    let query = 'SELECT * FROM p2p_credit_orders WHERE 1=1';
+    const params = [];
+
+    if (status && status !== 'ALL') {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    if (sellerWallet) {
+      query += ' AND seller_wallet = ?';
+      params.push(sellerWallet.trim());
+    }
+
+    if (sort === 'price_asc') {
+      query += ' ORDER BY (price_sol / credits_amount) ASC, created_at DESC';
+    } else if (sort === 'price_desc') {
+      query += ' ORDER BY (price_sol / credits_amount) DESC, created_at DESC';
+    } else if (sort === 'credits_desc') {
+      query += ' ORDER BY credits_amount DESC, created_at DESC';
+    } else {
+      query += ' ORDER BY created_at DESC';
+    }
+
+    query += ' LIMIT ? OFFSET ?';
+    params.push(Number(limit) || 50, Number(offset) || 0);
+
+    const rows = db.prepare(query).all(...params);
+    return rows.map(r => this.mapP2POrderRow(r));
+  }
+
+  // ── WALLET DOCKETS (Stable one-docket-per-wallet numbering for Live Audit) ──
+
+  /**
+   * Return Map<wallet_address, docket_number> for every docketed wallet.
+   */
+  getWalletDockets() {
+    const db = this.getDb();
+    const rows = db.prepare('SELECT wallet_address, docket_number FROM wallet_dockets').all();
+    return new Map(rows.map(r => [r.wallet_address, r.docket_number]));
+  }
+
+  /**
+   * Ensure every candidate wallet has exactly one persistent docket number.
+   * New dockets are issued in first-seen activity order (then wallet address),
+   * so numbering stays stable and ascending across refreshes.
+   * @param {Array<{walletAddress: string, firstSeenAt?: string}>} candidates
+   * @returns {Map<string, number>} wallet_address -> docket_number
+   */
+  ensureWalletDockets(candidates = []) {
+    const db = this.getDb();
+    const load = () => new Map(
+      db.prepare('SELECT wallet_address, docket_number FROM wallet_dockets').all()
+        .map(r => [r.wallet_address, r.docket_number])
+    );
+
+    let map = load();
+    const missing = candidates.filter(c => c && c.walletAddress && !map.has(c.walletAddress));
+    if (missing.length === 0) return map;
+
+    missing.sort((a, b) => {
+      const at = String(a.firstSeenAt || '');
+      const bt = String(b.firstSeenAt || '');
+      if (at !== bt) return at < bt ? -1 : 1;
+      return String(a.walletAddress).localeCompare(String(b.walletAddress));
+    });
+
+    const now = new Date().toISOString();
+    this.transaction(() => {
+      const stmt = db.prepare('INSERT INTO wallet_dockets (wallet_address, created_at) VALUES (?, ?)');
+      for (const c of missing) {
+        try {
+          stmt.run(c.walletAddress, now);
+        } catch {
+          // UNIQUE(wallet_address) race: another writer already issued its docket.
+        }
+      }
+    });
+
+    map = load();
+    return map;
+  }
+
+  getP2PStats() {
+    const db = this.getDb();
+    const stats = db.prepare(`
+      SELECT
+        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as active_listings_count,
+        COALESCE(SUM(CASE WHEN status = 'ACTIVE' THEN credits_amount ELSE 0 END), 0) as total_credits_active,
+        COUNT(CASE WHEN status IN ('COMPLETED', 'FILLED') THEN 1 END) as filled_orders_count,
+        COALESCE(SUM(CASE WHEN status IN ('COMPLETED', 'FILLED') THEN credits_amount ELSE 0 END), 0) as total_credits_traded,
+        COALESCE(SUM(CASE WHEN status IN ('COMPLETED', 'FILLED') THEN price_sol ELSE 0 END), 0) as total_sol_volume,
+        COALESCE(SUM(CASE WHEN status IN ('COMPLETED', 'FILLED') THEN tokens_to_burn_ui ELSE 0 END), 0) as total_tokens_burned_ui,
+        COUNT(*) as total_orders_count
+      FROM p2p_credit_orders
+    `).get();
+
+    return {
+      activeListingsCount: Number(stats?.active_listings_count || 0),
+      totalCreditsActive: Number(stats?.total_credits_active || 0),
+      filledOrdersCount: Number(stats?.filled_orders_count || 0),
+      totalCreditsTraded: Number(stats?.total_credits_traded || 0),
+      totalSolVolume: Number(stats?.total_sol_volume || 0),
+      totalTokensBurnedUi: Number(stats?.total_tokens_burned_ui || 0),
+      totalOrdersCount: Number(stats?.total_orders_count || 0)
+    };
   }
 
   close() {

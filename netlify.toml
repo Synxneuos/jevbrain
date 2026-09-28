@@ -48,8 +48,18 @@
   status = 200
 
 [[redirects]]
+  from = "/burning-day"
+  to = "/burning-day.html"
+  status = 200
+
+[[redirects]]
   from = "/teaser"
   to = "/teaser.html"
+  status = 200
+
+[[redirects]]
+  from = "/cinematic"
+  to = "/cinematic.html"
   status = 200
 
 [[redirects]]

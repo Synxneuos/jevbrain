@@ -91,23 +91,53 @@ export class RewardsStore {
     return account;
   }
 
+  // ── Compatibility shims (FIX: server.js called these but they never existed,
+  //    throwing TypeError for VIP grant paths and killing chat/verify flows) ──
+
+  /** Ensure a credit account (+ holder row) exists; returns the account record. */
+  ensureAccount(walletAddress) {
+    return this.getOrCreateAccount(walletAddress);
+  }
+
+  /** Current available credits as an exact BigInt (zero floating point). */
+  getCreditBalance(walletAddress) {
+    return BigInt(this.getOrCreateAccount(walletAddress).available);
+  }
+
+  /** Record a positive EARN credit grant (VIP/seed/airdrop style). */
+  creditAccrual(walletAddress, amount, referenceId = null) {
+    return this.recordLedgerEntry({
+      walletAddress,
+      type: 'EARN',
+      amount,
+      referenceId,
+      metadata: { reason: 'server_credit_grant' }
+    });
+  }
+
   /**
    * Verify financial invariants on an account
    */
   assertAccountInvariants(account) {
-    if (account.available < 0n) {
-      throw new Error(`Financial Invariant Violation: available credits cannot be negative (${account.available})`);
+    const avail = BigInt(account.available ?? '0');
+    const earned = BigInt(account.earned ?? '0');
+    const used = BigInt(account.used ?? '0');
+    const transferred = BigInt(account.transferred ?? '0');
+    const redeemed = BigInt(account.redeemed ?? '0');
+
+    if (avail < 0n) {
+      throw new Error(`Financial Invariant Violation: available credits cannot be negative (${avail})`);
     }
-    const totalOut = account.used + account.transferred + account.redeemed;
-    if (account.earned < totalOut) {
-      throw new Error(`Financial Invariant Violation: earned credits (${account.earned}) < spent+transferred+redeemed (${totalOut})`);
+    const totalOut = used + transferred + redeemed;
+    if (earned < totalOut) {
+      throw new Error(`Financial Invariant Violation: earned credits (${earned}) < spent+transferred+redeemed (${totalOut})`);
     }
-    if (account.available !== (account.earned - totalOut)) {
-      if (account.earned >= account.available + account.transferred + account.redeemed) {
-        account.used = account.earned - (account.available + account.transferred + account.redeemed);
+    if (avail !== (earned - totalOut)) {
+      if (earned >= avail + transferred + redeemed) {
+        account.used = (earned - (avail + transferred + redeemed));
         this.db.upsertCreditAccount(account);
       } else {
-        throw new Error(`Financial Invariant Violation: balance mismatch (available: ${account.available}, expected: ${account.earned - totalOut})`);
+        throw new Error(`Financial Invariant Violation: balance mismatch (available: ${avail}, expected: ${earned - totalOut})`);
       }
     }
   }
@@ -186,6 +216,32 @@ export class RewardsStore {
             account.used += amt;
             account.available -= amt;
           }
+          break;
+
+        case 'P2P_ESCROW':
+          if (account.available < amt) {
+            throw new Error(`Insufficient credits for P2P listing: requested ${amt}, available ${account.available}`);
+          }
+          account.transferred += amt;
+          account.available -= amt;
+          break;
+
+        case 'P2P_REFUND':
+          if (account.transferred < amt) {
+            throw new Error(`Invalid P2P refund: transferred ${account.transferred} < refund ${amt}`);
+          }
+          account.transferred -= amt;
+          account.available += amt;
+          break;
+
+        case 'P2P_BOUGHT':
+          account.earned += amt;
+          account.available += amt;
+          break;
+
+        case 'P2P_SOLD':
+          // Balance was already moved to transferred during escrow.
+          // This entry documents the final sale in the immutable ledger.
           break;
 
         default:

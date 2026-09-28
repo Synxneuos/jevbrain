@@ -66,13 +66,13 @@ export const MAX_ACTIVE_BOOST_LEVEL = (() => {
   return 2;
 })();
 
-// ── Tier Burn & Rate Matrix (spec §2) ────────────────────────────────────────
+// ── Tier Burn & Rate Matrix (spec §2 — 4x Supercharged: 1-hr yield every 15 mins) ────────────────
 export const BOOST_TIER_MATRIX = [
-  { tierLevel: 1, tierName: 'Reserve Initiate', minTokens: 1, baseRatePerHour: 10, burnTokensRequiredUi: 100, burnOfMinBagLabel: 'entry-level fixed burn' },
-  { tierLevel: 2, tierName: 'Charter Associate', minTokens: 1_000, baseRatePerHour: 50, burnTokensRequiredUi: 250, burnOfMinBagLabel: '25% of min bag' },
-  { tierLevel: 3, tierName: 'Principal Partner', minTokens: 10_000, baseRatePerHour: 200, burnTokensRequiredUi: 2_000, burnOfMinBagLabel: '20% of min bag' },
-  { tierLevel: 4, tierName: 'Syndicate Director', minTokens: 100_000, baseRatePerHour: 750, burnTokensRequiredUi: 15_000, burnOfMinBagLabel: '15% of min bag' },
-  { tierLevel: 5, tierName: 'Dynasty Magnate', minTokens: 1_000_000, baseRatePerHour: 2_500, burnTokensRequiredUi: 100_000, burnOfMinBagLabel: '10% of min bag' }
+  { tierLevel: 1, tierName: 'Reserve Initiate', minTokens: 1, baseRatePer15Min: 10, baseRatePerHour: 40, burnTokensRequiredUi: 100, burnOfMinBagLabel: 'entry-level fixed burn' },
+  { tierLevel: 2, tierName: 'Charter Associate', minTokens: 1_000, baseRatePer15Min: 50, baseRatePerHour: 200, burnTokensRequiredUi: 250, burnOfMinBagLabel: '25% of min bag' },
+  { tierLevel: 3, tierName: 'Principal Partner', minTokens: 10_000, baseRatePer15Min: 200, baseRatePerHour: 800, burnTokensRequiredUi: 2_000, burnOfMinBagLabel: '20% of min bag' },
+  { tierLevel: 4, tierName: 'Syndicate Director', minTokens: 100_000, baseRatePer15Min: 750, baseRatePerHour: 3_000, burnTokensRequiredUi: 15_000, burnOfMinBagLabel: '15% of min bag' },
+  { tierLevel: 5, tierName: 'Dynasty Magnate', minTokens: 1_000_000, baseRatePer15Min: 2_500, baseRatePerHour: 10_000, burnTokensRequiredUi: 100_000, burnOfMinBagLabel: '10% of min bag' }
 ];
 
 export function tokensUiToRaw(uiTokens) {
@@ -103,7 +103,9 @@ export function getBurnRequirementForTier(tierLevel) {
     tierName: row.tierName,
     requiredTokensUi: row.burnTokensRequiredUi,
     requiredTokensRaw: tokensUiToRaw(row.burnTokensRequiredUi).toString(),
+    baseRatePer15Min: row.baseRatePer15Min,
     baseRatePerHour: row.baseRatePerHour,
+    boostedRatePer15Min: Math.round(row.baseRatePer15Min * BOOST_LEVELS[2].multiplier),
     boostedRatePerHour: Math.round(row.baseRatePerHour * BOOST_LEVELS[2].multiplier),
     boostedCreditsPerDay: Math.round(row.baseRatePerHour * BOOST_LEVELS[2].multiplier * 24)
   };
@@ -113,6 +115,7 @@ export function getBurnRequirementForTier(tierLevel) {
 export function listBoostTierMatrix() {
   return BOOST_TIER_MATRIX.map(row => ({
     ...row,
+    boostedRate2xPer15Min: Math.round(row.baseRatePer15Min * BOOST_LEVELS[2].multiplier),
     boostedRate2xPerHour: Math.round(row.baseRatePerHour * BOOST_LEVELS[2].multiplier),
     boostedCredits2xPerDay: Math.round(row.baseRatePerHour * BOOST_LEVELS[2].multiplier * 24),
     previewRate3xPerHour: Math.round(row.baseRatePerHour * BOOST_LEVELS[3].multiplier),

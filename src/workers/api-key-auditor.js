@@ -103,6 +103,16 @@ export class ApiKeyAuditor {
 
       try {
         const eligibility = await getHolderEligibility(walletAddress, { skipCache: true });
+
+        // FIX (false suspension): a transient RPC/verification outage returns
+        // eligible:false + error — that is NOT proof the holder sold tokens.
+        // Only act on a successful verification result; on error, keep the key's
+        // current state untouched so legitimate holders never lose access.
+        if (eligibility.error) {
+          console.warn(`[ApiKeyAuditor] Skipping wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)} this cycle: on-chain verification unavailable (${eligibility.error}). Key state preserved.`);
+          continue;
+        }
+
         const tokensHeld = eligibility.balanceUi || 0;
         const isEligible = eligibility.eligible && tokensHeld >= 1;
 
