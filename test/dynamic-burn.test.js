@@ -101,7 +101,9 @@ test('Dynamic MC Tiers: resolveHolderTier adapts rate and level dynamically to m
 // 2. FEE HARVESTER & 95%/5% SPLIT TESTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('Fee Harvester: Correctly identifies Claimer and Treasury addresses', () => {
+// Payout keys are env-only since f282e8f — this check needs the real production env to be meaningful.
+const hasPayoutEnv = !!(process.env.FEE_CLAIMER_PRIVATE_KEY && process.env.TREASURY_WALLET_PUBLIC_KEY);
+test('Fee Harvester: Correctly identifies Claimer and Treasury addresses', { skip: hasPayoutEnv ? false : 'FEE_CLAIMER_PRIVATE_KEY / TREASURY_WALLET_PUBLIC_KEY not set' }, () => {
   const claimerPub = feeHarvester.getClaimerPublicKey();
   assert.strictEqual(claimerPub, '2yHeAq99m3NoZse674TQizAY8obNHwSm7mDXhNjssHYx');
   assert.strictEqual(TREASURY_WALLET_ADDRESS, '83SqfW6gs2jALfvpXnV4sMb1RQnzmiZNwjeunivMSaJ2');

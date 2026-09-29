@@ -1,8 +1,28 @@
+# 🔐 SECRETS — never upload .env / keys to the Vercel build
+.env
+.env.*
+!.env.example
+
+# 💾 USER DATA / STATE DBs — never uploaded
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Not needed for the serverless frontend/backend build
 pyproject.toml
 danio/
 github_sync.py
 test/
+scripts/
+samples/
 scratch/
+.github/
+.git/
 .venv/
 __pycache__/
 *.py[cod]
+public/assets/*.mp4
+*.mp4
+*.zip

@@ -1,0 +1,56 @@
+# =================================================================
+# JEV BRAIN — Docker build context exclusions (SECURITY FENCE)
+# -------------------------------------------------------------
+# Prevents local .env (real secret keys), user data/, SQLite DBs,
+# and host/dev cruft from ever being copied into the image by the
+# Dockerfile's `COPY . .`.  User data stays on the /data volume.
+# =================================================================
+
+# Dependencies (installed inside the image via `npm install --omit=dev`)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.log
+
+# 🔐 SECRETS — never copy real keys/credentials into the image
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+
+# 💾 USER DATA & PERSISTENT STATE (lives on /data volume, not in image)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Tests / dev tooling / scratch (not used at runtime)
+test/
+scratch/
+scripts/
+samples/
+coverage/
+
+# Version control / CI
+.git/
+.github/
+
+# Python helpers (optional; not used by the Node image)
+.venv/
+__pycache__/
+*.py[cod]
+.pypirc
+
+# Large / regenerable media artifacts
+public/assets/*.mp4
+*.mp4
+*.zip
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

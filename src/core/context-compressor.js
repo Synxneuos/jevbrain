@@ -26,11 +26,19 @@ export function compressPrompt(rawText) {
     text = text.replace(pattern, '');
   }
 
-  // 2. Collapse multi-line empty padding
-  text = text.replace(/\n{3,}/g, '\n\n');
-
-  // 3. Collapse extra whitespace
-  text = text.replace(/[ \t]{2,}/g, ' ');
+  // 2 + 3. Collapse padding — but never inside code. Fenced blocks (```…```) and
+  // agent tool payloads (<tool …>…</tool>) are passed through byte-for-byte, and
+  // leading indentation is always kept, so Python/YAML/diffs stay valid.
+  const PROTECTED = /(```[\s\S]*?```|<tool\b[\s\S]*?<\/tool>)/g;
+  text = text
+    .split(PROTECTED)
+    .map((chunk, i) => {
+      if (i % 2 === 1) return chunk; // protected segment
+      return chunk
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/(\S)[ \t]{2,}/g, '$1 ');
+    })
+    .join('');
 
   const compressed = text.trim();
   const savingsPct = originalLength > 0 

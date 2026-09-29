@@ -114,7 +114,68 @@ npx jev-brain audit .
 npx jev-brain route "Emergency: Payment webhook returning 502" --preset inbox
 ```
 
-### 5. 🔌 Universal Express / Fastify / Node Middleware
+### 5. 🤖 Terminal Agent — reads, edits, runs & ships your code
+Run `jevbrain` in any project folder. It's a full agent (Hermes-style), not just a chat: it explores the codebase, edits files with precise SEARCH/REPLACE patches, runs your tests and scripts, and handles branch → commit → push → PR — without you switching to Bash or GitHub.
+
+```bash
+jevbrain                                   # interactive agent in the current folder
+❯ the login test is failing — find out why, fix it and open a PR
+
+jevbrain do "add input validation to src/api.js and run the tests" --auto   # one-shot
+git diff | jevbrain do "review this diff and fix anything risky"
+```
+
+| In chat | What it does |
+|---|---|
+| *(just type)* | Agent task — tools: `list_files` `read_file` `search` `write_file` `edit_file` `run` `git` `load_skill` |
+| `/auto on\|off` · `/readonly` | Auto-approve edits/commands, or look-only. Default: every edit & command is shown for approval |
+| `/repo` `/diff` `/branch` `/commit` `/push` `/pr` `/ship` | Git & GitHub by hand (AI-written commit messages & PR descriptions) |
+| `/skills` · `/<skill> [task]` · `/skill use <name>` | Use skills |
+| `/agent off` | Plain chat without tools |
+
+**Safety:** every tool call passes the Agent Warden — writes stay inside the project, `.env`/keys are never read or committed, `rm -rf` / force-push / `DROP TABLE` are hard-blocked, and loops are caught. PRs use the GitHub CLI (`gh auth login`) or `GITHUB_TOKEN`.
+
+### ⚔️ Jev Brain Arena — let the models fight, let your tests judge
+Don't guess which model is best at *your* codebase. Arena spins up a sandboxed copy of your repo for each contender, lets every agent attack the same task in parallel, runs your test suite in each sandbox, and applies the winner's patch — only if it passes.
+
+```bash
+jevbrain arena "fix the failing auth test" --test "npm test" \
+  --models deepseek/deepseek-chat,openai/gpt-4o,meta-llama/llama-3.3-70b-instruct
+
+  🥇 A deepseek-chat           PASS      4      12       1 file(s), ±2
+  🥈 B gpt-4o                  FAIL      2      6        1 file(s), ±2
+  🥉 C llama-3.3-70b-instruct  no change 2      6        —
+  🏆 Winner: A deepseek-chat — Fixed the operator.
+```
+
+`-n 3` runs best-of-3 with one model · `--apply` skips the prompt · `--keep` keeps the sandboxes · `/arena …` works in chat. Your branch and history are never touched — the winning patch lands in your working tree for review and the losing sandboxes are deleted. Every contender still runs behind the Agent Warden. Each contender spends its own credits.
+
+**`/undo`** — reverts every file the agent's last task created or edited, instantly.
+
+### 6. 🧩 Skills — teach the agent your workflows
+Skills use the same `SKILL.md` format as Hermes Agent / Claude skills, so existing skills just work.
+
+```bash
+jevbrain skill new deploy-railway "Deploy this app to Railway"   # scaffold .jevbrain/skills/deploy-railway/SKILL.md
+jevbrain skill add github:owner/skills-repo/devops               # install from GitHub (folder, repo or /tree/ URL)
+jevbrain skill add ~/.hermes/skills/my-skill --global            # reuse a Hermes skill
+jevbrain skill list | show <name> | remove <name>
+
+jevbrain do --skill deploy-railway "ship the current branch"     # or /deploy-railway in chat
+```
+
+```markdown
+---
+name: deploy-railway
+description: Deploy this app to Railway safely
+---
+1. Run `npm test` — stop if it fails.
+2. Run `railway up` and report the URL.
+```
+
+Project skills live in `.jevbrain/skills/` (commit them — your whole team gets them); personal ones in `~/.jevbrain/skills/`. The agent sees every skill's description and loads the full instructions when relevant.
+
+### 7. 🔌 Universal Express / Fastify / Node Middleware
 Triage incoming webhooks or user prompts before expensive backend processing:
 
 ```typescript
@@ -134,7 +195,7 @@ app.post('/api/agent-hook', (req, res) => {
 });
 ```
 
-### 6. 🐍 Python AI Agents (LangChain / CrewAI / AutoGen)
+### 8. 🐍 Python AI Agents (LangChain / CrewAI / AutoGen)
 Integrate with Python AI agents via sub-millisecond local REST query:
 
 ```python

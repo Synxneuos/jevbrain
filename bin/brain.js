@@ -8,6 +8,11 @@ import { execSync } from 'node:child_process';
 import { JevBrain, PRESETS } from '../src/core/router.js';
 import { AgentWarden } from '../src/core/warden.js';
 import { MobileRunner } from '../src/core/mobile.js';
+import * as GitFlow from '../src/cli/git-workflow.js';
+import * as GitCmd from '../src/cli/git-commands.js';
+import * as Skills from '../src/cli/skills.js';
+import { JevAgent } from '../src/cli/agent.js';
+import { runArena } from '../src/cli/arena.js';
 
 const args = process.argv.slice(2);
 
@@ -607,12 +612,17 @@ async function handleConfig() {
   }
 }
 
-async function streamAiResponse(prompt, model = 'auto') {
+// opts.silent: don't print tokens/meta — just return the text (used for commit messages, PR bodies).
+// Returns { text, ...doneMeta } or null on failure.
+async function streamAiResponse(prompt, model = 'auto', opts = {}) {
+  const silent = !!opts.silent;
+  const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
   const cfg = loadCliConfig();
   const apiKey = cfg.apiKey || process.env.JEV_API_KEY;
   const endpoint = (cfg.endpoint || process.env.JEV_ENDPOINT || 'https://jevbrain.world').replace(/\/+$/, '');
 
   if (!apiKey) {
+    if (silent) return null;
     banner();
     console.error(`${RED}${BOLD}✖ No Jev Brain API Key Found${RESET}\n`);
     console.error(`${YELLOW}To use Jev Brain AI from your terminal, obtain your free API key for token holders:${RESET}`);
@@ -645,6 +655,7 @@ async function streamAiResponse(prompt, model = 'auto') {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let metaInfo = null;
+    let fullText = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -659,7 +670,9 @@ async function streamAiResponse(prompt, model = 'auto') {
           try {
             const parsed = JSON.parse(dataLine.slice(6));
             if (parsed.token) {
-              process.stdout.write(parsed.token);
+              fullText += parsed.token;
+              if (onToken) onToken(parsed.token);
+              else if (!silent) process.stdout.write(parsed.token);
             }
             if (parsed.done) {
               metaInfo = parsed;
@@ -669,6 +682,9 @@ async function streamAiResponse(prompt, model = 'auto') {
       }
     }
 
+    if (silent) {
+      return { ...(metaInfo || {}), text: fullText };
+    }
     process.stdout.write('\n');
     if (metaInfo && metaInfo.model) {
       const tierBadge = metaInfo.userTier?.tierName || 'Holder';
@@ -682,7 +698,7 @@ async function streamAiResponse(prompt, model = 'auto') {
         }
       }
     }
-    return metaInfo;
+    return { ...(metaInfo || {}), text: fullText };
   } catch (err) {
     console.error(`\n${RED}Connection error:${RESET}`, err.message);
     return null;
@@ -847,6 +863,57 @@ async function handleChat(initialModel = 'auto', opts = {}) {
   const apiKey = cfg.apiKey || process.env.JEV_API_KEY;
   let activeModel = initialModel;
 
+  // ── Repo-aware session state ────────────────────────────────────────────
+  const cwd = process.cwd();
+  const repoMode = GitFlow.isGitRepo(cwd);
+  let repoContextEnabled = repoMode;
+  const repoLabel = repoMode
+    ? (() => { const gh = GitFlow.githubRepo(cwd); const br = GitFlow.currentBranch(cwd) || 'no commits'; return `${gh ? `${gh.owner}/${gh.repo}` : path.basename(GitFlow.repoRoot(cwd))} @ ${br}`; })()
+    : '';
+  const attachedFiles = new Map(); // rel path → content (re-read before each prompt)
+  const history = [];              // [{ user, assistant }], last few turns sent as context
+  const MAX_HISTORY_TURNS = 4;
+
+  const gitCtx = {
+    cwd,
+    yes: false,
+    ask: (q) => promptLine(rl, q),
+    ai: async (prompt) => {
+      const r = await streamAiResponse(prompt, activeModel, { silent: true });
+      return r?.text || null;
+    }
+  };
+
+  // ── Agent mode (default): the model can read/edit files, run commands, use git & skills ──
+  let agentMode = !opts.plain;
+  const agent = new JevAgent({
+    cwd,
+    mode: opts.auto ? 'auto' : 'ask',
+    maxSteps: 20,
+    ask: (q) => promptLine(rl, q),
+    ai: (prompt, onToken) => streamAiResponse(prompt, activeModel, { silent: true, onToken })
+  });
+  let busy = false;
+
+  function buildPrompt(userInput) {
+    const parts = [];
+    if (repoContextEnabled && GitFlow.isGitRepo(cwd)) {
+      parts.push(`[Workspace — the user is running you inside their git repository]\n${GitFlow.repoContextSummary(cwd)}`);
+    }
+    for (const rel of attachedFiles.keys()) {
+      const f = GitFlow.readFileForContext(rel, cwd);
+      if (f.ok) parts.push(`[File: ${f.rel}]\n\`\`\`\n${f.content}\n\`\`\``);
+    }
+    if (history.length) {
+      parts.push('[Recent conversation]\n' + history.map(h =>
+        `User: ${GitFlow.truncate(h.user, 1500)}\nAssistant: ${GitFlow.truncate(h.assistant, 2500)}`
+      ).join('\n\n'));
+    }
+    if (!parts.length) return userInput;
+    parts.push(`[Current request]\n${userInput}`);
+    return parts.join('\n\n');
+  }
+
   // Live key validation on entry
   const check = await validateApiKey(endpoint, apiKey);
   if (!check.ok) {
@@ -872,16 +939,25 @@ async function handleChat(initialModel = 'auto', opts = {}) {
   const availCredits = startSummary ? Number(startSummary.availableCredits || 0).toLocaleString() : 'Active';
 
   console.log(`  ${C_MUTED}┌────────────────────────────────────────────────────────────────────────┐${RESET}`);
-  console.log(`  ${C_MUTED}│${RESET}  ${BOLD}${C_CYAN}⚡ Jev Brain Interactive Terminal Chat${RESET}                                ${C_MUTED}│${RESET}`);
+  console.log(`  ${C_MUTED}│${RESET}  ${BOLD}${C_CYAN}⚡ Jev Brain Agent${RESET} ${GRAY}· reads, edits, runs & ships code in ${path.basename(cwd)}${RESET}`);
   console.log(`  ${C_MUTED}│${RESET}  ${GRAY}Wallet:${RESET} ${CYAN}${shortAddr}${RESET} · ${GRAY}Tier:${RESET} ${C_PURPLE}[${tierName}]${RESET} (Tier ${d.tierId || 0})               ${C_MUTED}│${RESET}`);
   console.log(`  ${C_MUTED}│${RESET}  ${GRAY}Credits:${RESET} ${C_EMERALD}${availCredits} available${RESET} ${GRAY}(+${d.creditRatePerHour || 0}/hr)${RESET} · ${GRAY}Model:${RESET} ${C_CYAN}[${activeModel}]${RESET}         ${C_MUTED}│${RESET}`);
   console.log(`  ${C_MUTED}│${RESET}  ${GRAY}Commands: ${CYAN}/help${GRAY}, ${CYAN}/models${GRAY}, ${CYAN}/model <name>${GRAY}, ${CYAN}/balance${GRAY}, ${CYAN}/clear${GRAY}, ${CYAN}/exit${RESET}     ${C_MUTED}│${RESET}`);
+  if (repoMode) {
+    console.log(`  ${C_MUTED}│${RESET}  ${GRAY}Git:${RESET} ${CYAN}${repoLabel}${RESET} ${GRAY}· /repo /commit /push /pr /ship${RESET}`);
+  }
+  const skillCount = Skills.listSkills(cwd).length;
+  console.log(`  ${C_MUTED}│${RESET}  ${GRAY}Agent:${RESET} ${agentMode ? `${C_EMERALD}on${RESET}` : `${YELLOW}off${RESET}`} ${GRAY}· approvals:${RESET} ${agent.mode} ${GRAY}· skills:${RESET} ${skillCount} ${GRAY}(/skills)${RESET}`);
   console.log(`  ${C_MUTED}└────────────────────────────────────────────────────────────────────────┘${RESET}\n`);
 
   rl.prompt();
 
   rl.on('line', async (line) => {
     const input = line.trim();
+    if (busy) {
+      if (input) console.log(`${GRAY}(still working — wait for the current task to finish)${RESET}`);
+      return;
+    }
     if (!input) {
       rl.prompt();
       return;
@@ -907,7 +983,149 @@ async function handleChat(initialModel = 'auto', opts = {}) {
       console.log(`  ${CYAN}/status | /tier${RESET}      Show on-chain token holding and tier details`);
       console.log(`  ${CYAN}/key${RESET}                 Show active configured API key`);
       console.log(`  ${CYAN}/clear${RESET}               Clear terminal screen`);
-      console.log(`  ${CYAN}/exit${RESET}                Exit chat session\n`);
+      console.log(`  ${CYAN}/reset${RESET}               Forget conversation history (keeps attached files)`);
+      console.log(`\n${BOLD}Agent:${RESET}`);
+      console.log(`  ${CYAN}/agent on|off${RESET}        Agent mode (tools: files, shell, git, skills) — currently ${agentMode ? 'on' : 'off'}`);
+      console.log(`  ${CYAN}/auto on|off${RESET}         Auto-approve edits & commands (Warden still blocks destructive ones) — ${agent.mode === 'auto' ? 'on' : 'off'}`);
+      console.log(`  ${CYAN}/readonly${RESET}            Agent may only look, never change anything`);
+      console.log(`  ${CYAN}/steps <n>${RESET}           Max tool steps per task (now ${agent.maxSteps})`);
+      console.log(`  ${CYAN}/undo${RESET}                Revert every file the last task changed`);
+      console.log(`  ${CYAN}/arena <task> --test "npm test" [--models a,b,c]${RESET}`);
+      console.log(`                       ${GRAY}⚔ Several AI agents race on the same task in sandboxes; your tests pick the winner${RESET}`);
+      console.log(`\n${BOLD}Skills:${RESET}`);
+      console.log(`  ${CYAN}/skills${RESET}              List installed skills`);
+      console.log(`  ${CYAN}/<skill> [task]${RESET}      Run a task with that skill loaded`);
+      console.log(`  ${CYAN}/skill use|drop <name>${RESET}  Keep a skill active for the whole session / deactivate`);
+      console.log(`  ${CYAN}/skill new <name>${RESET}    Scaffold a skill in .jevbrain/skills (add --global for ~/.jevbrain)`);
+      console.log(`  ${CYAN}/skill add <src>${RESET}     Install from a folder, GitHub repo/folder, or .md URL`);
+      console.log(`  ${CYAN}/skill show|remove <name>${RESET}`);
+      console.log(`  ${CYAN}/exit${RESET}                Exit chat session`);
+      console.log(`\n${BOLD}Repository & GitHub:${RESET}`);
+      for (const [c, d] of GitCmd.GIT_HELP) console.log(`  ${CYAN}${c.padEnd(30)}${RESET}${d}`);
+      console.log(`  ${CYAN}${'/context on|off'.padEnd(30)}${RESET}Include branch + changed files in every prompt (${repoContextEnabled ? 'on' : 'off'})\n`);
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/agent')) {
+      const v = input.split(/\s+/)[1];
+      if (v === 'on' || v === 'off') agentMode = v === 'on';
+      console.log(`${GRAY}Agent mode: ${agentMode ? `${GREEN}on` : `${YELLOW}off (plain chat)`}${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/auto')) {
+      const v = input.split(/\s+/)[1] || (agent.mode === 'auto' ? 'off' : 'on');
+      agent.mode = v === 'on' ? 'auto' : 'ask';
+      console.log(agent.mode === 'auto'
+        ? `${YELLOW}⚡ Auto-approve ON — edits, commands and git run without asking. Warden still blocks destructive actions.${RESET}\n`
+        : `${GREEN}✔ Auto-approve OFF — you'll confirm each edit/command.${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input === '/readonly') {
+      agent.mode = 'readonly';
+      console.log(`${GREEN}✔ Read-only: the agent can explore but not change anything. /auto off to re-enable approvals.${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input === '/undo') {
+      const r = agent.undo();
+      if (!r.ok) console.log(`${GRAY}${r.error}${RESET}\n`);
+      else console.log(`${GREEN}↩ Reverted ${r.restored.length} file(s) from "${r.task.slice(0, 60)}":${RESET}\n${r.restored.map(f => `   ${CYAN}${f}${RESET}`).join('\n')}\n${GRAY}(Shell command side-effects are not reverted.)${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input === '/arena' || input.startsWith('/arena ')) {
+      busy = true;
+      rl.pause();
+      try {
+        await handleArena(splitArgs(input.slice(6)), { model: activeModel, ask: (q) => promptLine(rl, q) });
+      } catch (err) {
+        console.log(`${RED}✖ Arena error: ${err.message}${RESET}`);
+      } finally {
+        busy = false;
+      }
+      console.log();
+      rl.resume();
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/steps')) {
+      const n = parseInt(input.split(/\s+/)[1], 10);
+      if (n > 0 && n <= 100) agent.maxSteps = n;
+      console.log(`${GRAY}Max steps per task: ${agent.maxSteps}${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input === '/skills' || input.startsWith('/skill ') || input === '/skill') {
+      const parts = input === '/skills' ? ['list'] : input.split(/\s+/).slice(1);
+      const sub = parts[0] || 'list';
+      if (sub === 'use' || sub === 'drop') {
+        const sk = Skills.getSkill(parts[1], cwd);
+        if (!sk) console.log(`${RED}✖ No skill "${parts[1] || ''}". /skills to list.${RESET}\n`);
+        else if (sub === 'use') { agent.activeSkills.add(sk.name); console.log(`${GREEN}✔ Skill ${CYAN}${sk.name}${GREEN} active for this session.${RESET}\n`); }
+        else { agent.activeSkills.delete(sk.name); console.log(`${GREEN}✔ Skill ${sk.name} deactivated.${RESET}\n`); }
+      } else {
+        rl.pause();
+        await handleSkillCommand(parts, { cwd, active: agent.activeSkills });
+        rl.resume();
+      }
+      rl.prompt();
+      return;
+    }
+    if (input === '/reset') {
+      agent.history.length = 0;
+      history.length = 0;
+      console.log(`${GREEN}✔ Conversation history cleared.${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/context')) {
+      const v = input.split(/\s+/)[1];
+      if (v === 'on' || v === 'off') repoContextEnabled = v === 'on';
+      console.log(`${GRAY}Repo context in prompts: ${repoContextEnabled ? 'on' : 'off'}${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/add ') || input === '/add') {
+      const targets = input.slice(4).trim().split(/\s+/).filter(Boolean);
+      if (!targets.length) console.log(`${YELLOW}Usage: /add <file> [file…]${RESET}`);
+      for (const t of targets) {
+        const f = GitFlow.readFileForContext(t, cwd);
+        if (f.ok) {
+          attachedFiles.set(f.rel, true);
+          console.log(`${GREEN}✔ Attached ${CYAN}${f.rel}${RESET} ${GRAY}(${f.size.toLocaleString()} chars)${RESET}`);
+        } else {
+          console.log(`${RED}✖ ${t}: ${f.error}${RESET}`);
+        }
+      }
+      console.log();
+      rl.prompt();
+      return;
+    }
+    if (input === '/files') {
+      console.log(attachedFiles.size
+        ? `\n${[...attachedFiles.keys()].map(f => `  ${CYAN}${f}${RESET}`).join('\n')}\n`
+        : `${GRAY}No files attached. Use /add <file>.${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (input.startsWith('/drop')) {
+      const t = input.slice(5).trim();
+      if (!t || t === 'all') attachedFiles.clear();
+      else attachedFiles.delete(t.replace(/\\/g, '/').replace(/^\.\//, ''));
+      console.log(`${GREEN}✔ ${!t || t === 'all' ? 'All files detached' : `Detached ${t}`}.${RESET}\n`);
+      rl.prompt();
+      return;
+    }
+    if (/^\/(repo|git|diff|log|branch|switch|checkout|commit|push|pr|ship)(\s|$)/.test(input)) {
+      rl.pause();
+      try {
+        await GitCmd.handleGitSlashCommand(input, gitCtx);
+      } catch (err) {
+        console.log(`${RED}✖ ${err.message}${RESET}\n`);
+      }
+      rl.resume();
       rl.prompt();
       return;
     }
@@ -963,8 +1181,44 @@ async function handleChat(initialModel = 'auto', opts = {}) {
       return;
     }
 
+    // /<skill-name> [task] → run the task with that skill loaded
+    let task = input;
+    let oneShotSkill = null;
+    if (input.startsWith('/')) {
+      const [cmdName, ...restWords] = input.slice(1).split(/\s+/);
+      const sk = Skills.getSkill(cmdName, cwd);
+      if (!sk) {
+        console.log(`${YELLOW}Unknown command ${input.split(/\s+/)[0]}. Type /help (or /skills for installed skills).${RESET}\n`);
+        rl.prompt();
+        return;
+      }
+      oneShotSkill = sk.name;
+      task = restWords.join(' ').trim() || `Use the ${sk.name} skill on this project.`;
+    }
+
+    busy = true;
     rl.pause();
-    await streamAiResponse(input, activeModel);
+    try {
+      if (agentMode) {
+        const attached = [...attachedFiles.keys()];
+        const fullTask = attached.length ? `${task}\n\n(The user attached these files for context: ${attached.join(', ')} — read them first.)` : task;
+        const hadSkill = oneShotSkill && agent.activeSkills.has(oneShotSkill);
+        if (oneShotSkill) agent.activeSkills.add(oneShotSkill);
+        console.log();
+        await agent.run(fullTask);
+        if (oneShotSkill && !hadSkill) agent.activeSkills.delete(oneShotSkill);
+      } else {
+        const reply = await streamAiResponse(buildPrompt(task), activeModel);
+        if (reply?.text) {
+          history.push({ user: task, assistant: reply.text });
+          if (history.length > MAX_HISTORY_TURNS) history.shift();
+        }
+      }
+    } catch (err) {
+      console.log(`${RED}✖ ${err.message}${RESET}`);
+    } finally {
+      busy = false;
+    }
     console.log();
     rl.resume();
     rl.prompt();
@@ -976,19 +1230,246 @@ async function handleChat(initialModel = 'auto', opts = {}) {
   });
 }
 
+// `jevbrain skill …` and `/skill …` in chat
+async function handleSkillCommand(parts, { cwd = process.cwd(), active = new Set() } = {}) {
+  const flags = new Set(parts.filter(p => p.startsWith('--')));
+  const pos = parts.filter(p => !p.startsWith('--'));
+  const sub = pos[0] || 'list';
+  const global = flags.has('--global') || flags.has('-g');
+
+  switch (sub) {
+    case 'list':
+    case 'ls': {
+      const skills = Skills.listSkills(cwd);
+      if (!skills.length) {
+        console.log(`\n  ${GRAY}No skills installed yet.${RESET}`);
+        console.log(`  ${CYAN}jevbrain skill new <name>${RESET}                 ${GRAY}scaffold your own${RESET}`);
+        console.log(`  ${CYAN}jevbrain skill add github:owner/repo/path${RESET}  ${GRAY}install from GitHub${RESET}\n`);
+        return;
+      }
+      console.log(`\n  ${BOLD}Installed skills${RESET} ${GRAY}(run with /<name> in chat, or jevbrain do --skill <name> "…")${RESET}`);
+      for (const sk of skills) {
+        const badge = active.has(sk.name) ? `${C_EMERALD}●${RESET}` : ' ';
+        console.log(`  ${badge} ${CYAN}${sk.name.padEnd(24)}${RESET}${GRAY}[${sk.scope}]${RESET} ${sk.description.slice(0, 90)}`);
+      }
+      console.log();
+      return;
+    }
+    case 'new':
+    case 'create': {
+      const name = pos[1];
+      const description = pos.slice(2).join(' ');
+      const r = Skills.createSkill(name, { description, global, cwd });
+      if (!r.ok) { console.log(`${RED}✖ ${r.error}${RESET}\n`); return; }
+      console.log(`${GREEN}✔ Created skill ${CYAN}${r.name}${RESET}\n  ${GRAY}Edit:${RESET} ${r.file}`);
+      console.log(`  ${GRAY}Use it: ${CYAN}/${r.name} <task>${GRAY} in chat, or ${CYAN}jevbrain do --skill ${r.name} "<task>"${RESET}\n`);
+      return;
+    }
+    case 'add':
+    case 'install': {
+      const source = pos[1];
+      if (!source) {
+        console.log(`${YELLOW}Usage: jevbrain skill add <folder | github:owner/repo[/path] | https://github.com/… | https://…/SKILL.md> [--global] [--force]${RESET}\n`);
+        return;
+      }
+      process.stdout.write(`${GRAY}Installing skill(s) from ${source}…${RESET}\n`);
+      const r = await Skills.addSkill(source, { global, cwd, force: flags.has('--force') });
+      for (const i of r.installed) console.log(`${GREEN}✔ Installed ${CYAN}${i.name}${RESET} ${GRAY}→ ${i.dir}${RESET}`);
+      if (!r.ok) console.log(`${RED}✖ ${r.error}${RESET}`);
+      if (r.installed.length) {
+        console.log(`${YELLOW}⚠ Skills are instructions the agent will follow — review third-party skills (jevbrain skill show <name>) before using them.${RESET}`);
+      }
+      console.log();
+      return;
+    }
+    case 'show':
+    case 'cat': {
+      const sk = Skills.getSkill(pos[1], cwd);
+      if (!sk) { console.log(`${RED}✖ No skill "${pos[1] || ''}"${RESET}\n`); return; }
+      console.log(`\n${GRAY}${sk.file} [${sk.scope}]${RESET}\n\n${Skills.renderSkillForPrompt(sk)}\n`);
+      return;
+    }
+    case 'remove':
+    case 'rm':
+    case 'uninstall': {
+      const r = Skills.removeSkill(pos[1], { cwd });
+      console.log(r.ok ? `${GREEN}✔ Removed ${r.name} (${r.scope})${RESET}\n` : `${RED}✖ ${r.error}${RESET}\n`);
+      return;
+    }
+    case 'path':
+    case 'dirs':
+      for (const d of Skills.skillDirs(cwd)) console.log(`  ${d.scope.padEnd(8)} ${d.dir}`);
+      console.log();
+      return;
+    default:
+      console.log(`${YELLOW}Usage: jevbrain skill [list | new <name> [description] | add <source> | show <name> | remove <name> | path] [--global]${RESET}\n`);
+  }
+}
+
+// Parse `arena` arguments (shared by `jevbrain arena …` and `/arena …`)
+function parseArenaArgs(argv, defaultModel = 'auto') {
+  const o = { task: '', models: [], test: '', apply: false, keep: false, steps: 15, skills: [], n: 0 };
+  const words = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--models' || a === '--model' || a === '-m') { o.models.push(...String(argv[++i] || '').split(',').map(x => x.trim()).filter(Boolean)); continue; }
+    if (a === '--test' || a === '-t') { o.test = argv[++i] || ''; continue; }
+    if (a === '-n' || a === '--runs') { o.n = Math.min(5, Math.max(2, parseInt(argv[++i], 10) || 3)); continue; }
+    if (a === '--steps') { o.steps = parseInt(argv[++i], 10) || o.steps; continue; }
+    if (a === '--skill' || a === '-s') { if (argv[i + 1]) o.skills.push(argv[++i]); continue; }
+    if (a === '--apply' || a === '-y' || a === '--yes') { o.apply = true; continue; }
+    if (a === '--keep') { o.keep = true; continue; }
+    words.push(a);
+  }
+  o.task = words.join(' ').trim();
+  if (!o.models.length) o.models = Array(o.n || 3).fill(defaultModel);
+  else if (o.models.length === 1) o.models = Array(o.n || 3).fill(o.models[0]);
+  return o;
+}
+
+/** Split a command line honoring "double" and 'single' quotes (for /arena inside chat). */
+function splitArgs(line) {
+  const out = [];
+  for (const m of line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+
+async function handleArena(argv, { model = 'auto', ask = null } = {}) {
+  const o = parseArenaArgs(argv, model);
+  if (!o.task) {
+    console.log(`${YELLOW}Usage: jevbrain arena "<task>" [--test "npm test"] [--models a,b,c | -n 3] [--apply] [--steps 15] [--skill x] [--keep]${RESET}\n`);
+    return null;
+  }
+  const cfg = loadCliConfig();
+  if (!cfg.apiKey && !process.env.JEV_API_KEY) {
+    console.log(`${YELLOW}No API key configured. Run ${CYAN}jevbrain${YELLOW} once to set it up.${RESET}\n`);
+    return null;
+  }
+  for (const name of o.skills) {
+    if (!Skills.getSkill(name)) { console.log(`${RED}✖ No skill "${name}"${RESET}`); return null; }
+  }
+  return runArena({
+    task: o.task,
+    models: o.models,
+    test: o.test,
+    apply: o.apply,
+    keep: o.keep,
+    maxSteps: o.steps,
+    skills: o.skills,
+    ask,
+    aiFor: (m) => (prompt, onToken) => streamAiResponse(prompt, m, { silent: true, onToken })
+  });
+}
+
+// `jevbrain do "<task>"` — one-shot autonomous agent run in the current folder
+async function handleAgentTask(restArgs, model) {
+  const flags = [];
+  const words = [];
+  const skillsToUse = [];
+  let steps = 20;
+  for (let i = 0; i < restArgs.length; i++) {
+    const a = restArgs[i];
+    if (a === '--skill' || a === '-s') { if (restArgs[i + 1]) skillsToUse.push(restArgs[++i]); continue; }
+    if (a === '--steps') { steps = parseInt(restArgs[++i], 10) || steps; continue; }
+    if (a.startsWith('--') || a === '-y') { flags.push(a); continue; }
+    words.push(a);
+  }
+  let task = words.join(' ').trim();
+  const piped = await readAllStdin();
+  if (piped.trim()) task = `${task || 'Handle the following input.'}\n\nInput:\n\`\`\`\n${piped}\n\`\`\``;
+  if (!task) {
+    console.log(`${YELLOW}Usage: jevbrain do "<task>" [--auto|-y] [--readonly] [--skill <name>] [--steps <n>]${RESET}\n`);
+    return;
+  }
+
+  const cfg = loadCliConfig();
+  if (!cfg.apiKey && !process.env.JEV_API_KEY) {
+    console.log(`${YELLOW}No API key configured. Run ${CYAN}jevbrain${YELLOW} once to set it up (or jevbrain config set-key <key>).${RESET}\n`);
+    return;
+  }
+
+  const interactive = process.stdin.isTTY;
+  const auto = flags.includes('--auto') || flags.includes('--yes') || flags.includes('-y');
+  let rl = null;
+  const agent = new JevAgent({
+    cwd: process.cwd(),
+    mode: flags.includes('--readonly') ? 'readonly' : auto ? 'auto' : interactive ? 'ask' : 'readonly',
+    maxSteps: steps,
+    ask: interactive ? (q) => {
+      if (!rl) rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      return promptLine(rl, q);
+    } : null,
+    ai: (prompt, onToken) => streamAiResponse(prompt, model, { silent: true, onToken })
+  });
+  for (const name of skillsToUse) {
+    const sk = Skills.getSkill(name);
+    if (!sk) { console.log(`${RED}✖ No skill "${name}" (jevbrain skill list)${RESET}`); return; }
+    agent.activeSkills.add(sk.name);
+  }
+  if (!interactive && !auto && !flags.includes('--readonly')) {
+    console.log(`${GRAY}(non-interactive: read-only unless you pass --auto)${RESET}`);
+  }
+  try {
+    await agent.run(task);
+  } finally {
+    if (rl) rl.close();
+  }
+}
+
+// Top-level `jevbrain commit|push|pr|ship|branch|repo` — same flows as the chat slash commands.
+async function handleGitTopLevel(sub, restArgs, model) {
+  const yes = restArgs.includes('-y') || restArgs.includes('--yes') || !process.stdin.isTTY;
+  const arg = restArgs.filter(a => a !== '-y' && a !== '--yes').join(' ').trim();
+  let rl = null;
+  const ctx = {
+    cwd: process.cwd(),
+    yes,
+    ask: (q) => {
+      if (!rl) rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      return promptLine(rl, q);
+    },
+    ai: async (prompt) => {
+      const r = await streamAiResponse(prompt, model, { silent: true });
+      return r?.text || null;
+    }
+  };
+  try {
+    switch (sub) {
+      case 'repo': GitCmd.showRepo(ctx.cwd); break;
+      case 'branch': GitCmd.doBranch(arg, ctx.cwd); break;
+      case 'commit': await GitCmd.doCommit(arg, ctx); break;
+      case 'push': await GitCmd.doPush(ctx); break;
+      case 'pr': await GitCmd.doPr(arg, ctx); break;
+      case 'ship': await GitCmd.doShip(arg, ctx); break;
+    }
+  } finally {
+    if (rl) rl.close();
+  }
+}
+
 function showHelp() {
   banner();
   console.log(`${BOLD}AI & Terminal Commands:${RESET}`);
   console.log(`  ${CYAN}jevbrain${RESET}                            Start interactive terminal AI chat session`);
   console.log(`  ${CYAN}jevbrain "<prompt>"${RESET}                   Run AI query directly with streaming output`);
   console.log(`  ${CYAN}jevbrain -m <model> "<prompt>"${RESET}        Run AI query with a specific tier-allowed model`);
-  console.log(`  ${CYAN}jevbrain chat [-m <model>]${RESET}            Start interactive terminal AI chat session`);
+  console.log(`  ${CYAN}jevbrain chat [-m <model>] [--auto|--plain]${RESET}  Interactive agent (--plain = chat without tools)`);
+  console.log(`  ${CYAN}jevbrain do "<task>" [--auto] [--skill x]${RESET}  One-shot agent: explores, edits, runs, commits`);
+  console.log(`  ${CYAN}jevbrain skill list|new|add|show|remove${RESET}    Manage agent skills (SKILL.md, Hermes-compatible)`);
+  console.log(`  ${CYAN}jevbrain arena "<task>" --test "<cmd>"${RESET}      ⚔ AI agents race in sandboxes; tests pick the winner`);
   console.log(`  ${CYAN}jevbrain models${RESET}                       List permitted AI models for your holding tier`);
   console.log(`  ${CYAN}jevbrain status | tier${RESET}                Show live on-chain token holding, tier, and models`);
   console.log(`  ${CYAN}jevbrain balance | credits${RESET}            Check live credit balance and emissions`);
   console.log(`  ${CYAN}jevbrain config set-key <key>${RESET}         Configure your Jev Brain API key (jev_live_...)`);
   console.log(`  ${CYAN}jevbrain config get-key${RESET}               Show active key and check on-chain token tier`);
   console.log(`  ${CYAN}jevbrain config set-url <url>${RESET}         Point CLI to custom backend URL`);
+  console.log(`\n${BOLD}Git & GitHub (run inside your repo, or use the /slash versions in chat):${RESET}`);
+  console.log(`  ${CYAN}jevbrain repo${RESET}                         Branch, remote and changed files`);
+  console.log(`  ${CYAN}jevbrain branch [name|description]${RESET}    List branches or create & switch`);
+  console.log(`  ${CYAN}jevbrain commit ["message"] [-y]${RESET}      Warden-checked stage + commit (AI message if omitted)`);
+  console.log(`  ${CYAN}jevbrain push${RESET}                         Push current branch (sets upstream)`);
+  console.log(`  ${CYAN}jevbrain pr ["title"] [--draft] [-y]${RESET}  Push + open a GitHub PR (gh CLI or GITHUB_TOKEN)`);
+  console.log(`  ${CYAN}jevbrain ship ["description"] [-y]${RESET}    Branch → commit → push → PR in one step`);
   console.log(`\n${BOLD}Safety & Routing Commands:${RESET}`);
   console.log(`  ${CYAN}jevbrain init${RESET}                         Setup .jev.json config and pre-commit hook`);
   console.log(`  ${CYAN}jevbrain hook [install|uninstall|check]${RESET}  Git pre-commit safety firewall hook`);
@@ -1005,7 +1486,10 @@ function showHelp() {
   console.log(`  jevbrain status`);
   console.log(`  jevbrain models`);
   console.log(`  cat src/server.js | jevbrain "Audit this code for security vulnerabilities"`);
-  console.log(`  git diff | jevbrain "Write a detailed conventional git commit message"`);
+  console.log(`  jevbrain do "the tests in test/ are failing — find out why and fix it"`);
+  console.log(`  jevbrain skill add github:owner/skills-repo/deploy-railway`);
+  console.log(`  jevbrain arena "fix the failing auth test" --test "npm test" --models deepseek/deepseek-chat,openai/gpt-4o,auto`);
+  console.log(`  jevbrain ship "fix login timeout on mobile"`);
   console.log(`  jevbrain config set-key jev_live_xxxxxxxxxxxxxxxx`);
   console.log();
 }
@@ -1055,7 +1539,30 @@ async function main() {
       break;
     }
     case 'chat':
-      await handleChat(requestedModel);
+      await handleChat(requestedModel, { auto: cleanArgs.includes('--auto'), plain: cleanArgs.includes('--plain') });
+      break;
+    case 'do':
+    case 'agent':
+    case 'run':
+      await handleAgentTask(cleanArgs.slice(1), requestedModel);
+      break;
+    case 'arena':
+    case 'battle': {
+      const interactive = process.stdin.isTTY;
+      let arl = null;
+      try {
+        await handleArena(cleanArgs.slice(1), {
+          model: requestedModel,
+          ask: interactive ? (q) => { if (!arl) arl = readline.createInterface({ input: process.stdin, output: process.stdout }); return promptLine(arl, q); } : null
+        });
+      } finally {
+        if (arl) arl.close();
+      }
+      break;
+    }
+    case 'skill':
+    case 'skills':
+      await handleSkillCommand(cleanArgs.slice(1).length ? cleanArgs.slice(1) : ['list']);
       break;
     case 'stdin-prompt': {
       const stdinData = await readAllStdin();
@@ -1066,6 +1573,14 @@ async function main() {
       }
       break;
     }
+    case 'repo':
+    case 'branch':
+    case 'commit':
+    case 'push':
+    case 'pr':
+    case 'ship':
+      await handleGitTopLevel(primaryCommand, cleanArgs.slice(1), requestedModel);
+      break;
     case 'init':
       await handleInit();
       break;

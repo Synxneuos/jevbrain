@@ -123,7 +123,7 @@ try {
     [8000, '/exit']
   ]);
   const hasCreditLine = chatOut.includes('Credits used') || chatOut.includes('credits charged');
-  assert.ok(chatOut.includes('Interactive Terminal Chat'), 'Chat session must start with saved key');
+  assert.ok(chatOut.includes('Jev Brain Agent'), 'Agent session must start with saved key');
   assert.ok(hasCreditLine, `Expected a credit usage line. Output tail:\n${chatOut.slice(-800)}`);
   console.log('✔ Chat: streamed answer with credit usage + remaining balance line');
 

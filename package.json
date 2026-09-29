@@ -1,7 +1,7 @@
 {
   "name": "jev-brain",
   "version": "1.0.0",
-  "description": "Don't think. Route. Ultra-fast local decision firewall (<20ms) for agents, streams, and LLMs.",
+  "description": "Don't think. Route. Terminal AI agent (files, shell, git/PR, skills) + ultra-fast local decision firewall for agents, streams, and LLMs.",
   "main": "src/index.js",
   "types": "types/index.d.ts",
   "exports": {
@@ -31,10 +31,12 @@
   "scripts": {
     "start": "node bin/brain.js serve",
     "dev": "node bin/brain.js serve --port 3333",
-    "test": "node --max-old-space-size=4096 test/router.test.js && node --max-old-space-size=4096 test/mobile.test.js && node --max-old-space-size=4096 test/wallet.test.js && node --max-old-space-size=4096 test/sdk.test.js && node --max-old-space-size=4096 test/discord.test.js && node --max-old-space-size=4096 test/benchmark.test.js && node --max-old-space-size=4096 test/rewards.test.js && node --max-old-space-size=4096 test/security-isolation.test.js && node --max-old-space-size=4096 test/dynamic-burn.test.js && node --max-old-space-size=4096 test/api-keys.test.js && node --max-old-space-size=4096 test/mobile-wallet-deeplink.test.js && node --max-old-space-size=4096 test/boost-engine.test.js",
+    "test": "node --max-old-space-size=4096 test/router.test.js && node --max-old-space-size=4096 test/mobile.test.js && node --max-old-space-size=4096 test/wallet.test.js && node --max-old-space-size=4096 test/sdk.test.js && node --max-old-space-size=4096 test/discord.test.js && node --max-old-space-size=4096 test/benchmark.test.js && node --max-old-space-size=4096 test/rewards.test.js && node --max-old-space-size=4096 test/security-isolation.test.js && node --max-old-space-size=4096 test/dynamic-burn.test.js && node --max-old-space-size=4096 test/api-keys.test.js && node --max-old-space-size=4096 test/mobile-wallet-deeplink.test.js && node --max-old-space-size=4096 test/boost-engine.test.js && node test/git-workflow.test.mjs && node test/agent.test.mjs",
     "test:devnet": "node test/devnet-financial-integration.mjs",
     "test:e2e": "node test/e2e-production-readiness.mjs",
     "test:cli": "node test/cli-interactive.smoke.mjs",
+    "test:git": "node test/git-workflow.test.mjs",
+    "test:agent": "node test/agent.test.mjs",
     "test:persistence": "node test/persistence.test.mjs",
     "test:full": "npm test && npm run test:e2e && npm run test:devnet",
     "classify": "node bin/brain.js classify",
@@ -42,6 +44,10 @@
     "audit": "node bin/brain.js audit"
   },
   "keywords": [
+    "ai-agent",
+    "cli-agent",
+    "model-arena",
+    "agent-skills",
     "ai",
     "agent-firewall",
     "agent-warden",
